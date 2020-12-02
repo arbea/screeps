@@ -37,11 +37,17 @@ module.exports.loop = function () {
   //screeps act
   for (var name in Game.creeps) {
     var creep = Game.creeps[name];
-    if (creep.memory.role == "Worker") {
-      roleWorker.run(creep);
-    }
-    if (creep.memory.role == "Deffender") {
-      roleDeffender.run(creep);
+
+    switch (creep.memory.role) {
+      case "Worker":
+        roleWorker.run(creep);
+        break;
+      case "Deffender":
+        roleDeffender.run(creep);
+        break;
+      case "Healer":
+        roleHealer.run(creep);
+        break;
     }
   }
   //clear mem

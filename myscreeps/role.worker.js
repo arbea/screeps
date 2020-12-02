@@ -1,25 +1,26 @@
 var roleWorker = {
   run: function (creep) {
-    function work(pos) {
+    function work(obj) {
+      creep.moveTo(obj, { visualizePathStyle: { stroke: '#ffffff' } });
       switch (creep.memory.nowtask) {
         case "mine":
-          var err = creep.harvest(pos);
+          var err = creep.harvest(obj);
           //creep.say("mine");
           break;
         case "upgradeController":
-          var err = creep.upgradeController(pos);
+          var err = creep.upgradeController(obj);
           // creep.say("upgradeController");
           break;
         case "transfer":
-          var err = creep.transfer(pos, RESOURCE_ENERGY);
+          var err = creep.transfer(obj, RESOURCE_ENERGY);
           //creep.say("transfer");
           break;
         case "build":
-          var err = creep.build(pos);
+          var err = creep.build(obj);
           //creep.say("build");
           break;
         case "repair":
-          var err = creep.repair(pos);
+          var err = creep.repair(obj);
           //creep.say("repair");
           break;
         default:
@@ -28,11 +29,10 @@ var roleWorker = {
         creep.memory.nowtask = "null";
       else if (creep.memory.nowtask == "repair")
         creep.memory.nowtask = "null";
-      if (err) {
+
+      if (err && (err != ERR_NOT_IN_RANGE)) {
         creep.say(err);
-        if (err == ERR_NOT_IN_RANGE)
-          creep.moveTo(pos, { visualizePathStyle: { stroke: '#ffffff' } });
-        else if (err == ERR_NOT_ENOUGH_RESOURCES)
+        if (err == ERR_NOT_ENOUGH_RESOURCES)
           creep.memory.nowtask = "mine";
         else
           creep.memory.nowtask = "null";
