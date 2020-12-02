@@ -32,8 +32,7 @@ var roleWorker = {
 
       if (err && (err != ERR_NOT_IN_RANGE)) {
         //creep.say(err);
-        if (err == ERR_NOT_ENOUGH_RESOURCES)
-          creep.memory.nowtask = "mine";
+        if (err == ERR_NOT_ENOUGH_RESOURCES)          creep.memory.nowtask = "mine";
         else
           creep.memory.nowtask = "null";
       }
