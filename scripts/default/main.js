@@ -3,7 +3,7 @@ var roleDeffender = require("role.deffender");
 var roleHealer = require("role.healer");
 
 module.exports.loop = function () {
-  /* 
+  /* tower test
     var tower = Game.getObjectById('e81d03b9c8698f785978e824');
     if(tower) {
         var closestDamagedStructure = tower.pos.findClosestByRange(FIND_STRUCTURES, {
