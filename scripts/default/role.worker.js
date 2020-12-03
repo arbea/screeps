@@ -81,6 +81,10 @@ var roleWorker = {
       if (target_repair_path.length > target_build_path.length) { creep.memory.nowtask = "build"; target = target_build; }
       if (creep.memory.nowtask == "null") { creep.memory.nowtask = "upgradeController"; target = creep.room.controller; }
       if (target_transfer) { creep.memory.nowtask = "transfer"; target = target_transfer; }
+      if(target == null)
+        Game.notify(JSON.stringify(creep.memory),60);
+
+      Game.notify(JSON.stringify(creep.memory));
       creep.memory.targetid = target.id;
     }
     //creep.say(creep.memory.nowtask);
