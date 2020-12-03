@@ -31,7 +31,7 @@ module.exports.loop = function () {
       memory: { role: "Deffender" },
     });
   }
-  if (worker.length < 8 && Game.spawns["Spawn1"].energy >= 300) {
+  if (worker.length < 9 && Game.spawns["Spawn1"].energy >= 300) {
     var newName = "Worker" + Game.time;
     //console.log("Spawning new Worker: " + newName);
     Game.spawns["Spawn1"].spawnCreep([WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE], newName, {
