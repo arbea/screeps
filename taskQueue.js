@@ -92,7 +92,7 @@ function addMiningTasks(room, tasks) {
 		// miner) feeding it faster than one hauler can clear - open more slots when there's
 		// more energy sitting at the source than one hauler trip can carry, capped by the same
 		// tile-count ceiling as mining.
-		const haulSlots = countHaulSlotsNeeded(room, source);
+		const haulSlots = mining.haulSlotsForSource(room, source);
 		const currentHaulers = countCreepsAssignedTo(source.id, TASK_TYPES.HAUL);
 		const openHaulSlots = Math.max(0, haulSlots - currentHaulers);
 		for (let slot = 0; slot < openHaulSlots; slot++) {
@@ -104,23 +104,6 @@ function addMiningTasks(room, tasks) {
 			});
 		}
 	}
-}
-
-const HAULER_CAPACITY_ESTIMATE = 50; // conservative baseline; matches the default generalist body
-
-function countHaulSlotsNeeded(room, source) {
-	const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
-		filter: structure => structure.structureType === STRUCTURE_CONTAINER,
-	})[0];
-	const stored = container ? container.store[RESOURCE_ENERGY] : 0;
-	const dropped = source.pos
-		.findInRange(FIND_DROPPED_RESOURCES, 2)
-		.reduce((sum, resource) => sum + resource.amount, 0);
-
-	const neededByVolume = Math.ceil((stored + dropped) / HAULER_CAPACITY_ESTIMATE);
-	const accessibleTileCount = mining.getAccessibleTiles(room, source.pos).length;
-
-	return Math.max(1, Math.min(neededByVolume, accessibleTileCount));
 }
 
 // Only scans for an existing container/site when neither is cached yet, and only actually

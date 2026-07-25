@@ -92,10 +92,44 @@ function addMinerRequest(room, requests) {
 	});
 }
 
+// An idle, empty-handed generalist can only ever pick up a HAUL task (BUILD/REPAIR/UPGRADE
+// all require carried energy it doesn't have). So "is there a labor surplus" isn't a number
+// to tune - it's answerable directly from the map: sum up how many HAUL slots the sources
+// can actually support (same tile/backlog-derived capacity taskQueue uses to open them) and
+// compare against how many idle, broke generalists already exist. No knob needed.
+function countIdleBrokeGeneralists(room) {
+	return _.filter(
+		Game.creeps,
+		creep =>
+			creep.room.name === room.name &&
+			creep.memory.role !== 'miner' &&
+			!creep.memory.task &&
+			creep.store[RESOURCE_ENERGY] === 0
+	).length;
+}
+
+function totalHaulCapacity(room) {
+	return room.find(FIND_SOURCES_ACTIVE).reduce((sum, source) => sum + mining.haulSlotsForSource(room, source), 0);
+}
+
+function countActiveHaulers(room) {
+	return _.filter(
+		Game.creeps,
+		creep => creep.room.name === room.name && creep.memory.task && creep.memory.task.type === 'HAUL'
+	).length;
+}
+
 function addGeneralistRequest(room, taskBacklog, requests) {
 	const atPopulationCap = countCreepsInRoom(room) >= config.MAX_CREEPS;
 	if (atPopulationCap) return;
 	if (!hasStaleBacklog(taskBacklog)) return;
+
+	// A generalist already waiting idle with nothing to carry, while every HAUL slot the map
+	// can support is already filled, means spawning another one adds population that has
+	// nowhere to go right now - not "needs more hands".
+	const someoneWaiting = countIdleBrokeGeneralists(room) > 0;
+	const haulSlotsFull = countActiveHaulers(room) >= totalHaulCapacity(room);
+	if (someoneWaiting && haulSlotsFull) return;
 
 	requests.push({
 		role: 'generalist',
