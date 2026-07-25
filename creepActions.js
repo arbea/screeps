@@ -1,5 +1,6 @@
 const TASK_TYPES = require('./taskTypes');
 const { logDone } = require('./log');
+const { checkAndHandleStall } = require('./stallDetection');
 
 function runDefense(creep, hostile) {
 	const inRange = creep.pos.inRangeTo(hostile, 1);
@@ -237,6 +238,9 @@ const ROOM_TARGETED_TASKS = new Set([TASK_TYPES.SCOUT, TASK_TYPES.REMOTE_DEFENSE
 function runCreep(creep) {
 	const task = creep.memory.task;
 	if (!task) return;
+
+	const wasStalled = checkAndHandleStall(creep);
+	if (wasStalled) return;
 
 	if (ROOM_TARGETED_TASKS.has(task.type)) {
 		const done = ACTIONS[task.type](creep, task);
