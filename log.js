@@ -46,6 +46,10 @@ function describeTask(task, target) {
 			return `佔領 Controller (${target.pos.roomName})`;
 		case TASK_TYPES.REMOTE_HARVEST:
 			return `遠程礦源 (${target.pos.roomName} ${target.pos.x},${target.pos.y})`;
+		case TASK_TYPES.MINE:
+			return `駐守開採 (${target.pos.x},${target.pos.y})`;
+		case TASK_TYPES.HAUL:
+			return `搬運能量 (${target.pos.x},${target.pos.y})`;
 		default:
 			return task.type;
 	}
@@ -59,8 +63,17 @@ function logDone(creep, task, target) {
 	log(`[完工] ${creep.name} 完成了:${describeTask(task, target)}`);
 }
 
+const SPAWN_ROLE_LABELS = {
+	defender: '戰鬥兵',
+	miner: '礦工',
+	scout: '偵查兵',
+	reserver: '佔領兵',
+	remoteHarvester: '遠程採礦兵',
+	remoteDefender: '遠程戰鬥兵',
+};
+
 function logSpawn(role, name, cost) {
-	const roleLabel = role === 'defender' ? '戰鬥兵' : '通才兵';
+	const roleLabel = SPAWN_ROLE_LABELS[role] || '通才兵';
 	log(`[誕生] 新的${roleLabel} ${name} 誕生了(造價 ${cost} 能量)`);
 }
 

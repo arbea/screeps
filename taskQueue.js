@@ -8,7 +8,7 @@ function buildTaskQueue(room) {
 
 	addDefenseTasks(room, tasks);
 	addRefillTasks(room, tasks);
-	addHarvestTasks(room, tasks);
+	addMiningTasks(room, tasks);
 	addBuildTasks(room, tasks);
 	addRepairTasks(room, tasks);
 	addUpgradeTask(room, tasks);
@@ -60,37 +60,86 @@ function addRefillTasks(room, tasks) {
 	}
 }
 
-// A source has at most 8 walkable adjacent tiles, so that's the real-world ceiling on
-// concurrent harvesters regardless of what config.MAX_HARVESTERS_PER_SOURCE says. config
-// values can come from Memory (dashboard-editable, external input), so a malformed or
-// mistyped override can't be trusted to stay within a sane range.
-const MAX_HARVESTERS_HARD_CAP = 8;
-
-function clampMaxHarvesters(value) {
-	const invalid = typeof value !== 'number' || !Number.isFinite(value) || value < 0;
-	if (invalid) return 3;
-	return Math.min(value, MAX_HARVESTERS_HARD_CAP);
-}
-
-function addHarvestTasks(room, tasks) {
+// Stationary mining: one dedicated miner sits on a source and harvests forever (a MINE
+// task never completes), dropping energy at its own position - onto a container there if
+// one has been built. A separate hauler task ferries whatever accumulates back to base.
+// This replaces the old "several generalists each self-haul" harvest pattern, which wastes
+// travel time and under-utilizes a source's regen rate compared to one saturated miner.
+function addMiningTasks(room, tasks) {
 	const sources = room.find(FIND_SOURCES_ACTIVE);
-	const maxHarvesters = clampMaxHarvesters(config.MAX_HARVESTERS_PER_SOURCE);
 
 	for (const source of sources) {
-		const openSlots = Math.max(0, maxHarvesters - countCreepsAssignedTo(source.id));
-		for (let slot = 0; slot < openSlots; slot++) {
+		ensureContainerSite(room, source);
+
+		const hasMiner = countCreepsAssignedTo(source.id, TASK_TYPES.MINE) > 0;
+		if (!hasMiner) {
 			tasks.push({
-				id: `${TASK_TYPES.HARVEST}:${source.id}:${slot}`,
-				type: TASK_TYPES.HARVEST,
+				id: `${TASK_TYPES.MINE}:${source.id}`,
+				type: TASK_TYPES.MINE,
 				priority: config.PRIORITY.HARVEST,
 				targetId: source.id,
 			});
 		}
+
+		tasks.push({
+			id: `${TASK_TYPES.HAUL}:${source.id}`,
+			type: TASK_TYPES.HAUL,
+			priority: config.PRIORITY.HAUL,
+			targetId: source.id,
+		});
 	}
 }
 
-function countCreepsAssignedTo(targetId) {
-	return _.filter(Game.creeps, creep => creep.memory.task && creep.memory.task.targetId === targetId).length;
+// Only scans for an existing container/site when neither is cached yet, and only actually
+// tries placement on the same cadence as the (already throttled) repair scan - this never
+// runs room.find every tick.
+function ensureContainerSite(room, source) {
+	if (!config.AUTO_BUILD_CONTAINERS) return;
+	if (!Memory.containerSites) Memory.containerSites = {};
+	if (Memory.containerSites[source.id]) return;
+
+	const isScanTick = Game.time % config.REPAIR_SCAN_INTERVAL === 0;
+	if (!isScanTick) return;
+
+	const hasContainer = source.pos.findInRange(FIND_STRUCTURES, 1, {
+		filter: structure => structure.structureType === STRUCTURE_CONTAINER,
+	}).length > 0;
+	const hasSite = source.pos.findInRange(FIND_CONSTRUCTION_SITES, 1, {
+		filter: site => site.structureType === STRUCTURE_CONTAINER,
+	}).length > 0;
+	if (hasContainer || hasSite) {
+		Memory.containerSites[source.id] = true;
+		return;
+	}
+
+	placeContainerNear(room, source);
+}
+
+function placeContainerNear(room, source) {
+	const terrain = room.getTerrain();
+
+	for (let dx = -1; dx <= 1; dx++) {
+		for (let dy = -1; dy <= 1; dy++) {
+			const isSourceTile = dx === 0 && dy === 0;
+			if (isSourceTile) continue;
+
+			const x = source.pos.x + dx;
+			const y = source.pos.y + dy;
+			const inBounds = x >= 1 && x <= 48 && y >= 1 && y <= 48;
+			if (!inBounds) continue;
+			if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+
+			room.createConstructionSite(x, y, STRUCTURE_CONTAINER);
+			return;
+		}
+	}
+}
+
+function countCreepsAssignedTo(targetId, taskType) {
+	return _.filter(
+		Game.creeps,
+		creep => creep.memory.task && creep.memory.task.targetId === targetId && (!taskType || creep.memory.task.type === taskType)
+	).length;
 }
 
 function addBuildTasks(room, tasks) {
@@ -154,11 +203,14 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.HARVEST || taskType === TASK_TYPES.REMOTE_HARVEST) {
 		return partTypes.includes(WORK);
 	}
-	if (taskType === TASK_TYPES.REFILL_SPAWN || taskType === TASK_TYPES.REFILL_TOWER) {
+	if (taskType === TASK_TYPES.REFILL_SPAWN || taskType === TASK_TYPES.REFILL_TOWER || taskType === TASK_TYPES.HAUL) {
 		return partTypes.includes(CARRY);
 	}
 	if (taskType === TASK_TYPES.SCOUT) {
 		return creep.memory.role === 'scout';
+	}
+	if (taskType === TASK_TYPES.MINE) {
+		return creep.memory.role === 'miner' && partTypes.includes(WORK);
 	}
 	if (taskType === TASK_TYPES.RESERVE_CONTROLLER) {
 		return partTypes.includes(CLAIM);
@@ -173,8 +225,12 @@ function isCreepReadyForTask(creep, taskType) {
 		taskType === TASK_TYPES.REMOTE_HARVEST ||
 		taskType === TASK_TYPES.REMOTE_DEFENSE ||
 		taskType === TASK_TYPES.SCOUT ||
-		taskType === TASK_TYPES.RESERVE_CONTROLLER;
+		taskType === TASK_TYPES.RESERVE_CONTROLLER ||
+		taskType === TASK_TYPES.MINE;
 	if (gatheringTask) return true;
+
+	const alwaysPicksUpFirst = taskType === TASK_TYPES.HAUL;
+	if (alwaysPicksUpFirst) return true;
 
 	return creep.store[RESOURCE_ENERGY] > 0;
 }
@@ -191,8 +247,15 @@ function isCreepIdle(creep) {
 function assignTasks(room, taskQueue) {
 	const idleCreeps = _.filter(Game.creeps, creep => creep.room.name === room.name && isCreepIdle(creep));
 
+	// Task lists are rebuilt fresh every tick (same id, new object), so a task already held by
+	// a non-idle creep from a previous tick would otherwise look "unclaimed" here and get
+	// handed to a second creep too - this shows up worst on multi-tick tasks (HAUL, MINE,
+	// RESERVE_CONTROLLER) that don't finish in the same tick they're assigned.
+	const activeTaskIds = getTaskAssignments();
+
 	for (const task of taskQueue) {
 		if (idleCreeps.length === 0) break;
+		if (activeTaskIds.has(task.id)) continue;
 
 		const creepIndex = _.findIndex(idleCreeps, creep => canCreepDoTask(creep, task));
 		const noCreepAvailable = creepIndex === -1;

@@ -133,6 +133,67 @@ function runRemoteHarvest(creep, source) {
 	return false;
 }
 
+function runMine(creep, source) {
+	const inRange = creep.pos.isNearTo(source);
+	if (!inRange) {
+		creep.moveTo(source);
+		return false;
+	}
+	creep.harvest(source);
+	return false;
+}
+
+function deliverEnergyToStructures(creep) {
+	const target = creep.room.find(FIND_MY_STRUCTURES, {
+		filter: structure =>
+			(structure.structureType === STRUCTURE_SPAWN ||
+				structure.structureType === STRUCTURE_EXTENSION ||
+				structure.structureType === STRUCTURE_TOWER) &&
+			structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+	})[0];
+	if (!target) return false;
+
+	const inRange = creep.pos.isNearTo(target);
+	if (!inRange) {
+		creep.moveTo(target);
+		return false;
+	}
+	creep.transfer(target, RESOURCE_ENERGY);
+	return true;
+}
+
+function runHaul(creep, source) {
+	const full = creep.store.getFreeCapacity() === 0;
+	if (full) return deliverEnergyToStructures(creep);
+
+	const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
+		filter: structure => structure.structureType === STRUCTURE_CONTAINER,
+	})[0];
+	if (container && container.store[RESOURCE_ENERGY] > 0) {
+		const inRange = creep.pos.isNearTo(container);
+		if (!inRange) {
+			creep.moveTo(container);
+			return false;
+		}
+		creep.withdraw(container, RESOURCE_ENERGY);
+		return false;
+	}
+
+	const dropped = source.pos.findInRange(FIND_DROPPED_RESOURCES, 2)[0];
+	if (dropped) {
+		const inRange = creep.pos.isNearTo(dropped);
+		if (!inRange) {
+			creep.moveTo(dropped);
+			return false;
+		}
+		creep.pickup(dropped);
+		return false;
+	}
+
+	creep.moveTo(source);
+	return false;
+}
+
 function runRemoteDefense(creep, task) {
 	const inTargetRoom = creep.room.name === task.targetRoomName;
 	if (!inTargetRoom) {
@@ -157,6 +218,8 @@ const ACTIONS = {
 	[TASK_TYPES.REFILL_SPAWN]: runRefill,
 	[TASK_TYPES.REFILL_TOWER]: runRefill,
 	[TASK_TYPES.HARVEST]: runHarvest,
+	[TASK_TYPES.MINE]: runMine,
+	[TASK_TYPES.HAUL]: runHaul,
 	[TASK_TYPES.BUILD]: runBuild,
 	[TASK_TYPES.REPAIR]: runRepair,
 	[TASK_TYPES.UPGRADE]: runUpgrade,

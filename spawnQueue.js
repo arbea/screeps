@@ -68,6 +68,39 @@ function buildGeneralistBody(energyAvailable) {
 	return body;
 }
 
+function clampMinerWorkCount(value) {
+	const invalid = typeof value !== 'number' || !Number.isFinite(value) || value < 1;
+	return invalid ? 5 : Math.min(value, 5);
+}
+
+function buildMinerBody(energyCapacity) {
+	const workCost = BODYPART_COST[WORK];
+	const moveCost = BODYPART_COST[MOVE];
+	const maxWork = clampMinerWorkCount(config.MINER_MAX_WORK);
+
+	const affordableWork = Math.floor((energyCapacity - moveCost) / workCost);
+	const workCount = Math.max(1, Math.min(affordableWork, maxWork));
+
+	const body = [];
+	for (let i = 0; i < workCount; i++) body.push(WORK);
+	body.push(MOVE);
+	return body;
+}
+
+function addMinerRequest(room, requests) {
+	const sourceCount = room.find(FIND_SOURCES_ACTIVE).length;
+	const minerCount = _.filter(Game.creeps, creep => creep.memory.role === 'miner' && creep.room.name === room.name).length;
+	const needsMiner = minerCount < sourceCount;
+	if (!needsMiner) return;
+
+	requests.push({
+		role: 'miner',
+		priority: config.SPAWN_PRIORITY.MINER,
+		body: buildMinerBody(room.energyCapacityAvailable),
+		memory: { role: 'miner' },
+	});
+}
+
 function addGeneralistRequest(room, taskBacklog, requests) {
 	const atPopulationCap = countCreepsInRoom(room) >= config.MAX_CREEPS;
 	if (atPopulationCap) return;
@@ -83,6 +116,7 @@ function addGeneralistRequest(room, taskBacklog, requests) {
 function getSpawnRequests(room, taskBacklog) {
 	const requests = [];
 	addDefenderRequest(room, requests);
+	addMinerRequest(room, requests);
 	addGeneralistRequest(room, taskBacklog, requests);
 
 	const myUsername = room.controller.owner.username;
