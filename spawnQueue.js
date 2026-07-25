@@ -116,15 +116,33 @@ function countActiveHaulers(room) {
 	).length;
 }
 
+// HAUL delivers straight into spawn/extension/tower, so it never leaves a broke generalist
+// holding energy of its own - the self-serve HARVEST_FALLBACK slots (mining.js) are the *only*
+// other route by which one can ever earn carryable energy to spend on BUILD/REPAIR/UPGRADE.
+// A backlog of buildable work doesn't mean "spawn more hands" if both routes into the economy
+// are already saturated - it means the existing population has nowhere to go either.
+function totalFallbackHarvestCapacity(room) {
+	return room.find(FIND_SOURCES_ACTIVE).reduce((sum, source) => sum + mining.fallbackHarvestSlotsForSource(room, source), 0);
+}
+
+function countActiveFallbackHarvesters(room) {
+	return _.filter(
+		Game.creeps,
+		creep => creep.room.name === room.name && creep.memory.task && creep.memory.task.type === 'HARVEST'
+	).length;
+}
+
 function addGeneralistRequest(room, taskBacklog, requests) {
 	if (!hasStaleBacklog(taskBacklog)) return;
 
-	// A generalist already waiting idle with nothing to carry, while every HAUL slot the map
-	// can support is already filled, means spawning another one adds population that has
-	// nowhere to go right now - not "needs more hands".
+	// A generalist already waiting idle with nothing to carry, while every route into the
+	// economy (HAUL or self-serve fallback harvest) the map can support is already filled,
+	// means spawning another one adds population that has nowhere to go right now - not
+	// "needs more hands".
 	const someoneWaiting = countIdleBrokeGeneralists(room) > 0;
 	const haulSlotsFull = countActiveHaulers(room) >= totalHaulCapacity(room);
-	if (someoneWaiting && haulSlotsFull) return;
+	const fallbackSlotsFull = countActiveFallbackHarvesters(room) >= totalFallbackHarvestCapacity(room);
+	if (someoneWaiting && haulSlotsFull && fallbackSlotsFull) return;
 
 	requests.push({
 		role: 'generalist',

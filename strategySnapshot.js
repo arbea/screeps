@@ -57,7 +57,7 @@ function publishStrategySnapshot(room) {
 			currentMiners: countCreepsAssignedTo(source.id, 'MINE'),
 			haulCapacity,
 			currentHaulers: countCreepsAssignedTo(source.id, 'HAUL'),
-			fallbackCapacity: Math.max(0, accessibleTiles - minerCapacity),
+			fallbackCapacity: mining.fallbackHarvestSlotsForSource(room, source),
 			currentFallbackHarvesters: countCreepsAssignedTo(source.id, 'HARVEST'),
 		};
 	});

@@ -7,6 +7,7 @@ const mining = require('./mining');
 function buildTaskQueue(room) {
 	const tasks = [];
 
+	ensureExtensionSites(room);
 	addDefenseTasks(room, tasks);
 	addRefillTasks(room, tasks);
 	addMiningTasks(room, tasks);
@@ -109,7 +110,7 @@ function addMiningTasks(room, tasks) {
 		// for BUILD/REPAIR/UPGRADE and just sits there. A last-resort, lowest-priority self-
 		// serve harvest fills whatever tile space the dedicated miners aren't already using,
 		// so idle labor can still make itself useful instead of waiting on nothing.
-		const fallbackSlots = Math.max(0, mining.getAccessibleTiles(room, source.pos).length - maxMiners);
+		const fallbackSlots = mining.fallbackHarvestSlotsForSource(room, source);
 		const currentFallbackHarvesters = countCreepsAssignedTo(source.id, TASK_TYPES.HARVEST);
 		const openFallbackSlots = Math.max(0, fallbackSlots - currentFallbackHarvesters);
 		for (let slot = 0; slot < openFallbackSlots; slot++) {
@@ -153,6 +154,76 @@ function placeContainerNear(room, source) {
 	if (!tile) return;
 
 	room.createConstructionSite(tile.x, tile.y, STRUCTURE_CONTAINER);
+}
+
+// Extensions are what raises energyCapacityAvailable, and until they exist the room can't
+// afford the bigger bodies (remote harvester, reserver) that everything past the home room
+// depends on. How many are allowed is fixed by the game per controller level and where they
+// can go is dictated by the terrain around the spawn - neither is a strategy choice, so both
+// are derived here rather than exposed as a count or a hand-authored layout to configure.
+function ensureExtensionSites(room) {
+	const isScanTick = Game.time % config.REPAIR_SCAN_INTERVAL === 0;
+	if (!isScanTick) return;
+
+	const spawn = room.find(FIND_MY_SPAWNS)[0];
+	if (!spawn) return;
+
+	const allowed = CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][room.controller.level];
+	const built = room.find(FIND_MY_STRUCTURES, {
+		filter: structure => structure.structureType === STRUCTURE_EXTENSION,
+	}).length;
+	const queued = room.find(FIND_MY_CONSTRUCTION_SITES, {
+		filter: site => site.structureType === STRUCTURE_EXTENSION,
+	}).length;
+
+	const missing = allowed - built - queued;
+	if (missing <= 0) return;
+
+	placeExtensionSites(room, spawn, missing);
+}
+
+// A radius-6 box around the spawn already holds more same-parity tiles than the 60 extensions
+// the game allows even at RCL 8, so the search never needs to sweep the whole room.
+const EXTENSION_SEARCH_RADIUS = 6;
+
+function isTileEmpty(room, x, y) {
+	const occupied =
+		room.lookForAt(LOOK_STRUCTURES, x, y).length > 0 || room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
+	return !occupied;
+}
+
+// Places extensions only on tiles sharing the spawn's parity, which leaves every
+// opposite-parity tile free: each extension keeps all four of its orthogonal neighbours
+// walkable, so a growing cluster can never seal the spawn in or block its own refill route.
+function placeExtensionSites(room, spawn, count) {
+	const terrain = room.getTerrain();
+	const parity = (spawn.pos.x + spawn.pos.y) % 2;
+	let placed = 0;
+
+	for (let radius = 1; radius <= EXTENSION_SEARCH_RADIUS; radius++) {
+		for (let dx = -radius; dx <= radius; dx++) {
+			for (let dy = -radius; dy <= radius; dy++) {
+				const enoughPlaced = placed >= count;
+				if (enoughPlaced) return;
+
+				// Only the outermost band of each box is new; inner tiles were covered by a
+				// smaller radius already.
+				const onRingEdge = Math.abs(dx) === radius || Math.abs(dy) === radius;
+				if (!onRingEdge) continue;
+
+				const x = spawn.pos.x + dx;
+				const y = spawn.pos.y + dy;
+				const inBounds = x >= 1 && x <= 48 && y >= 1 && y <= 48;
+				if (!inBounds) continue;
+				if ((x + y) % 2 !== parity) continue;
+				if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+				if (!isTileEmpty(room, x, y)) continue;
+
+				const created = room.createConstructionSite(x, y, STRUCTURE_EXTENSION) === OK;
+				if (created) placed++;
+			}
+		}
+	}
 }
 
 function countCreepsAssignedTo(targetId, taskType) {

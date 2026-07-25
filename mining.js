@@ -45,6 +45,16 @@ function maxMinersForSource(room, source) {
 	return Math.max(1, Math.min(minersForSaturation, accessibleTileCount));
 }
 
+// Tile space around a source that dedicated miners aren't already standing on - the ceiling on
+// how many idle, empty-handed generalists can usefully self-harvest there at once. Shared by
+// taskQueue (to open HARVEST_FALLBACK task slots) and spawnQueue (to know when that route for
+// a broke creep to earn energy is also saturated, not just the HAUL route).
+function fallbackHarvestSlotsForSource(room, source) {
+	const maxMiners = maxMinersForSource(room, source);
+	const accessibleTileCount = getAccessibleTiles(room, source.pos).length;
+	return Math.max(0, accessibleTileCount - maxMiners);
+}
+
 const HAULER_CAPACITY_ESTIMATE = 50; // conservative baseline; matches the default generalist body
 
 // How many haulers a source can usefully occupy: enough to clear whatever's currently piled
@@ -65,4 +75,11 @@ function haulSlotsForSource(room, source) {
 	return Math.max(1, Math.min(neededByVolume, accessibleTileCount));
 }
 
-module.exports = { minerWorkCount, getAccessibleTiles, maxMinersForSource, haulSlotsForSource, SATURATION_WORK };
+module.exports = {
+	minerWorkCount,
+	getAccessibleTiles,
+	maxMinersForSource,
+	haulSlotsForSource,
+	fallbackHarvestSlotsForSource,
+	SATURATION_WORK,
+};
