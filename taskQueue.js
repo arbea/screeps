@@ -103,6 +103,23 @@ function addMiningTasks(room, tasks) {
 				targetId: source.id,
 			});
 		}
+
+		// An idle, empty-handed generalist that can't get a HAUL slot (e.g. the other source
+		// is temporarily depleted, or every slot is already taken) has no way to earn energy
+		// for BUILD/REPAIR/UPGRADE and just sits there. A last-resort, lowest-priority self-
+		// serve harvest fills whatever tile space the dedicated miners aren't already using,
+		// so idle labor can still make itself useful instead of waiting on nothing.
+		const fallbackSlots = Math.max(0, mining.getAccessibleTiles(room, source.pos).length - maxMiners);
+		const currentFallbackHarvesters = countCreepsAssignedTo(source.id, TASK_TYPES.HARVEST);
+		const openFallbackSlots = Math.max(0, fallbackSlots - currentFallbackHarvesters);
+		for (let slot = 0; slot < openFallbackSlots; slot++) {
+			tasks.push({
+				id: `${TASK_TYPES.HARVEST}:${source.id}:${currentFallbackHarvesters + slot}`,
+				type: TASK_TYPES.HARVEST,
+				priority: config.PRIORITY.HARVEST_FALLBACK,
+				targetId: source.id,
+			});
+		}
 	}
 }
 

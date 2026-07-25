@@ -8,6 +8,7 @@ const DEFAULTS = {
 		BUILD: 50,
 		REPAIR: 40,
 		UPGRADE: 20,
+		HARVEST_FALLBACK: 5,
 	},
 
 	SPAWN_PRIORITY: {

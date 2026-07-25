@@ -57,8 +57,8 @@ function pickBestUnclaimedCandidate(homeRoomName) {
 	return bestScore > -Infinity ? best : null;
 }
 
-function pickUnscoutedAdjacent(homeRoomName) {
-	return getAdjacentRoomNames(homeRoomName).find(roomName => !Memory.rooms[roomName]);
+function getUnscoutedAdjacent(homeRoomName) {
+	return getAdjacentRoomNames(homeRoomName).filter(roomName => !Memory.rooms[roomName]);
 }
 
 function maxRemoteRooms() {
@@ -88,19 +88,18 @@ function maintainRemoteRoomList(homeRoomName) {
 	}
 }
 
-function addScoutTask(homeRoom, tasks) {
-	const hasSlot = (Memory.remoteRooms || []).length < maxRemoteRooms();
-	if (!hasSlot) return;
-
-	const target = pickUnscoutedAdjacent(homeRoom.name);
-	if (!target) return;
-
-	tasks.push({
-		id: `${TASK_TYPES.SCOUT}:${target}`,
-		type: TASK_TYPES.SCOUT,
-		priority: config.PRIORITY_SCOUT,
-		targetRoomName: target,
-	});
+// Scouting is pure information-gathering with no ongoing cost once done, so unlike remote
+// mining it isn't gated by how many remote rooms we're committed to working - one scout per
+// still-unknown adjacent room, in parallel, uses idle labor without any downside.
+function addScoutTasks(homeRoom, tasks) {
+	for (const targetRoomName of getUnscoutedAdjacent(homeRoom.name)) {
+		tasks.push({
+			id: `${TASK_TYPES.SCOUT}:${targetRoomName}`,
+			type: TASK_TYPES.SCOUT,
+			priority: config.PRIORITY_SCOUT,
+			targetRoomName,
+		});
+	}
 }
 
 function addRemoteTasks(myUsername, tasks) {
@@ -149,7 +148,7 @@ function runExpansion(homeRoom) {
 
 	const myUsername = homeRoom.controller.owner.username;
 	const tasks = [];
-	addScoutTask(homeRoom, tasks);
+	addScoutTasks(homeRoom, tasks);
 	addRemoteTasks(myUsername, tasks);
 	return tasks;
 }
@@ -166,8 +165,10 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 	const requests = [];
 	if (!config.EXPANSION_ENABLED) return requests;
 
-	const unscouted = pickUnscoutedAdjacent(homeRoom.name);
-	const needsScout = unscouted && countCreepsWithRole('scout') === 0 && (Memory.remoteRooms || []).length < maxRemoteRooms();
+	// One scout per unscouted room is the natural ceiling here - spawning more than that would
+	// just leave extras with nowhere new to explore, so the count comes from the map, not a knob.
+	const unscoutedCount = getUnscoutedAdjacent(homeRoom.name).length;
+	const needsScout = countCreepsWithRole('scout') < unscoutedCount;
 	if (needsScout) {
 		requests.push({ role: 'scout', priority: config.SPAWN_PRIORITY_SCOUT, body: config.SCOUT_BODY, memory: { role: 'scout' } });
 	}
