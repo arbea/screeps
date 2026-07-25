@@ -4,6 +4,14 @@ const TASK_TYPES = require('./taskTypes');
 function log(message) {
 	if (!config.LOG_ENABLED) return;
 	console.log(`[${Game.time}] ${message}`);
+	pushEventLog(message);
+}
+
+function pushEventLog(message) {
+	Memory.eventLog.push({ tick: Game.time, message });
+
+	const overCap = Memory.eventLog.length > config.EVENT_LOG_SIZE;
+	if (overCap) Memory.eventLog.shift();
 }
 
 function describeTask(task, target) {

@@ -11,6 +11,7 @@ function cleanDeadCreepMemory() {
 
 module.exports.loop = function () {
 	if (!Memory.taskBacklog) Memory.taskBacklog = {};
+	if (!Memory.eventLog) Memory.eventLog = [];
 	cleanDeadCreepMemory();
 
 	for (const roomName in Game.rooms) {

@@ -24,4 +24,5 @@ module.exports = {
 	MIN_ENERGY_TO_SPAWN: 200,
 
 	LOG_ENABLED: true,
+	EVENT_LOG_SIZE: 50,
 };
