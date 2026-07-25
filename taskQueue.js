@@ -273,6 +273,21 @@ function getRepairTargetIds(room) {
 	return Memory.repairCache[room.name].ids;
 }
 
+// The downgrade clock is a hard game deadline, not a strategy call: let it run out and the room
+// drops a controller level, taking every extension that level allowed with it. So the configured
+// UPGRADE priority is only the baseline for a full clock - as it runs down the task escalates
+// continuously toward defense-level urgency. Continuous rather than a threshold means there's no
+// "how close is too close" number to guess, and a single upgrade refills the clock and drops the
+// priority straight back to baseline, so the room spends only as much on it as the clock demands.
+function upgradePriority(controller) {
+	const fullClock = CONTROLLER_DOWNGRADE[controller.level];
+	if (!fullClock) return config.PRIORITY.UPGRADE;
+
+	const clockRemaining = Math.max(0, Math.min(1, controller.ticksToDowngrade / fullClock));
+	const spread = config.PRIORITY.DEFENSE - config.PRIORITY.UPGRADE;
+	return Math.round(config.PRIORITY.UPGRADE + spread * (1 - clockRemaining));
+}
+
 function addUpgradeTask(room, tasks) {
 	const controller = room.controller;
 	const controllerMissingOrNotMine = !controller || !controller.my;
@@ -281,7 +296,7 @@ function addUpgradeTask(room, tasks) {
 	tasks.push({
 		id: `${TASK_TYPES.UPGRADE}:${controller.id}`,
 		type: TASK_TYPES.UPGRADE,
-		priority: config.PRIORITY.UPGRADE,
+		priority: upgradePriority(controller),
 		targetId: controller.id,
 	});
 }
