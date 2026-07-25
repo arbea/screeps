@@ -55,4 +55,4 @@ function logDefense(room, hostile) {
 	log(`[入侵] ${room.name} 出現敵人:${attacker}`);
 }
 
-module.exports = { log, logAssign, logDone, logSpawn, logDefense };
+module.exports = { log, logAssign, logDone, logSpawn, logDefense, describeTask };

@@ -1,6 +1,6 @@
 const TASK_TYPES = require('./taskTypes');
 const config = require('./config');
-const { logAssign, logDefense } = require('./log');
+const { logAssign, logDefense, describeTask } = require('./log');
 
 function buildTaskQueue(room) {
 	const tasks = [];
@@ -164,11 +164,11 @@ function assignTasks(room, taskQueue) {
 }
 
 function updateBacklog(taskQueue) {
-	const assignedTaskIds = getAssignedTaskIds();
+	const assignments = getTaskAssignments();
 
 	for (const task of taskQueue) {
 		const backlogExempt = task.type === TASK_TYPES.UPGRADE;
-		const isAssigned = assignedTaskIds.has(task.id);
+		const isAssigned = assignments.has(task.id);
 
 		if (backlogExempt || isAssigned) {
 			delete Memory.taskBacklog[task.id];
@@ -182,19 +182,37 @@ function updateBacklog(taskQueue) {
 	}
 }
 
-function getAssignedTaskIds() {
-	const ids = new Set();
+function getTaskAssignments() {
+	const assignments = new Map();
 	for (const name in Game.creeps) {
 		const task = Game.creeps[name].memory.task;
-		if (task) ids.add(task.id);
+		if (task) assignments.set(task.id, name);
 	}
-	return ids;
+	return assignments;
+}
+
+function publishSnapshot(room, taskQueue) {
+	const assignments = getTaskAssignments();
+	if (!Memory.taskSnapshot) Memory.taskSnapshot = {};
+
+	Memory.taskSnapshot[room.name] = taskQueue.map(task => {
+		const firstSeenTick = Memory.taskBacklog[task.id];
+		return {
+			id: task.id,
+			type: task.type,
+			priority: task.priority,
+			description: describeTask(task, Game.getObjectById(task.targetId)),
+			assignedTo: assignments.get(task.id) || null,
+			backlogTicks: firstSeenTick ? Game.time - firstSeenTick : 0,
+		};
+	});
 }
 
 function runTaskQueue(room) {
 	const taskQueue = buildTaskQueue(room);
 	updateBacklog(taskQueue);
 	assignTasks(room, taskQueue);
+	publishSnapshot(room, taskQueue);
 }
 
 module.exports = { runTaskQueue };
