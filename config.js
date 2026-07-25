@@ -22,4 +22,6 @@ module.exports = {
 	DEFENDER_BODY: [ATTACK, ATTACK, MOVE, MOVE],
 	MAX_CREEPS: 8,
 	MIN_ENERGY_TO_SPAWN: 200,
+
+	LOG_ENABLED: true,
 };

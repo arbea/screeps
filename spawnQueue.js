@@ -1,4 +1,5 @@
 const config = require('./config');
+const { log } = require('./log');
 
 function getAvailableSpawn(room) {
 	return room.find(FIND_MY_SPAWNS, { filter: spawn => !spawn.spawning })[0];
@@ -85,7 +86,9 @@ function runSpawnQueue(room, taskBacklog) {
 	const cost = bodyCost(request.body);
 	if (room.energyAvailable < cost) return;
 
-	spawn.spawnCreep(request.body, `${request.role}_${Game.time}`, { memory: {} });
+	const name = `${request.role}_${Game.time}`;
+	spawn.spawnCreep(request.body, name, { memory: {} });
+	log(`spawn ${request.role} ${name} (cost ${cost})`);
 }
 
 module.exports = { runSpawnQueue };

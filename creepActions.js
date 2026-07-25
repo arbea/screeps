@@ -1,4 +1,5 @@
 const TASK_TYPES = require('./taskTypes');
+const { log } = require('./log');
 
 function runDefense(creep, hostile) {
 	const inRange = creep.pos.inRangeTo(hostile, 1);
@@ -103,6 +104,7 @@ function runCreep(creep) {
 
 	const done = ACTIONS[task.type](creep, target);
 	if (done) {
+		log(`done ${task.type} ${creep.name}`);
 		delete creep.memory.task;
 	}
 }

@@ -1,5 +1,6 @@
 const TASK_TYPES = require('./taskTypes');
 const config = require('./config');
+const { log } = require('./log');
 
 function buildTaskQueue(room) {
 	const tasks = [];
@@ -19,6 +20,7 @@ function addDefenseTasks(room, tasks) {
 	const target = room.find(FIND_HOSTILE_CREEPS)[0];
 	if (!target) return;
 
+	log(`defense: hostile in ${room.name}`);
 	tasks.push({
 		id: `${TASK_TYPES.DEFENSE}:${room.name}`,
 		type: TASK_TYPES.DEFENSE,
@@ -154,8 +156,10 @@ function assignTasks(room, taskQueue) {
 		const noCreepAvailable = creepIndex === -1;
 		if (noCreepAvailable) continue;
 
-		idleCreeps[creepIndex].memory.task = task;
+		const creep = idleCreeps[creepIndex];
+		creep.memory.task = task;
 		idleCreeps.splice(creepIndex, 1);
+		log(`assign ${task.type} -> ${creep.name} (${task.id})`);
 	}
 }
 
