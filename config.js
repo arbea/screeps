@@ -25,6 +25,10 @@ const DEFAULTS = {
 
 	LOG_ENABLED: true,
 	EVENT_LOG_SIZE: 50,
+
+	REPAIR_SCAN_INTERVAL: 20,
+	SNAPSHOT_INTERVAL: 5,
+	CPU_WARN_THRESHOLD: 0.8,
 };
 
 function deepClone(value) {

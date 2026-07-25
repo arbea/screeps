@@ -3,6 +3,7 @@ const taskQueue = require('./taskQueue');
 const creepActions = require('./creepActions');
 const spawnQueue = require('./spawnQueue');
 const mapSnapshot = require('./mapSnapshot');
+const { log } = require('./log');
 
 function cleanDeadCreepMemory() {
 	for (const name in Memory.creeps) {
@@ -40,4 +41,16 @@ module.exports.loop = function () {
 	for (const name in Game.creeps) {
 		creepActions.runCreep(Game.creeps[name]);
 	}
+
+	reportCpuUsage();
 };
+
+function reportCpuUsage() {
+	const used = Game.cpu.getUsed();
+	Memory.cpuStats = { used, limit: Game.cpu.limit, bucket: Game.cpu.bucket, tick: Game.time };
+
+	const overThreshold = used > Game.cpu.limit * config.CPU_WARN_THRESHOLD;
+	if (overThreshold) {
+		log(`⚠ CPU 使用 ${used.toFixed(1)}/${Game.cpu.limit}(bucket ${Game.cpu.bucket})`);
+	}
+}

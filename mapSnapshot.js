@@ -1,8 +1,13 @@
+const config = require('./config');
+
 function toPoint(target) {
 	return { x: target.pos.x, y: target.pos.y };
 }
 
 function publishMapSnapshot(room) {
+	const isSnapshotTick = Game.time % config.SNAPSHOT_INTERVAL === 0;
+	if (!isSnapshotTick) return;
+
 	if (!Memory.mapSnapshot) Memory.mapSnapshot = {};
 
 	Memory.mapSnapshot[room.name] = {

@@ -89,17 +89,31 @@ function addBuildTasks(room, tasks) {
 }
 
 function addRepairTasks(room, tasks) {
+	for (const structureId of getRepairTargetIds(room)) {
+		tasks.push({
+			id: `${TASK_TYPES.REPAIR}:${structureId}`,
+			type: TASK_TYPES.REPAIR,
+			priority: config.PRIORITY.REPAIR,
+			targetId: structureId,
+		});
+	}
+}
+
+// FIND_STRUCTURES scans every structure in the room (roads included), which is one of the
+// costliest room.find calls available; structure HP changes slowly, so the result is cached
+// and only rescanned every REPAIR_SCAN_INTERVAL ticks instead of every tick.
+function getRepairTargetIds(room) {
+	if (!Memory.repairCache) Memory.repairCache = {};
+
+	const cache = Memory.repairCache[room.name];
+	const stale = !cache || Game.time - cache.lastScan >= config.REPAIR_SCAN_INTERVAL;
+	if (!stale) return cache.ids;
+
 	const structures = room.find(FIND_STRUCTURES, {
 		filter: structure => structure.hits < structure.hitsMax * config.REPAIR_HP_THRESHOLD,
 	});
-	for (const structure of structures) {
-		tasks.push({
-			id: `${TASK_TYPES.REPAIR}:${structure.id}`,
-			type: TASK_TYPES.REPAIR,
-			priority: config.PRIORITY.REPAIR,
-			targetId: structure.id,
-		});
-	}
+	Memory.repairCache[room.name] = { lastScan: Game.time, ids: structures.map(structure => structure.id) };
+	return Memory.repairCache[room.name].ids;
 }
 
 function addUpgradeTask(room, tasks) {
@@ -212,7 +226,9 @@ function runTaskQueue(room) {
 	const taskQueue = buildTaskQueue(room);
 	updateBacklog(taskQueue);
 	assignTasks(room, taskQueue);
-	publishSnapshot(room, taskQueue);
+
+	const isSnapshotTick = Game.time % config.SNAPSHOT_INTERVAL === 0;
+	if (isSnapshotTick) publishSnapshot(room, taskQueue);
 }
 
 module.exports = { runTaskQueue };
