@@ -152,7 +152,13 @@ function deliverEnergyToStructures(creep) {
 				structure.structureType === STRUCTURE_TOWER) &&
 			structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
 	})[0];
-	if (!target) return false;
+	// Nowhere left to put it means the room's stores are full, not that this creep still has
+	// work to do - reporting "not done" here strands it holding a full load forever, and once
+	// every hauler is stranded the miners keep dropping energy that decays on the ground. The
+	// haul is finished; ending it frees the creep to be reassigned, and since it is carrying
+	// energy it immediately qualifies for BUILD/REPAIR/UPGRADE, which is where that load should
+	// go when the stores can't take it.
+	if (!target) return true;
 
 	const inRange = creep.pos.isNearTo(target);
 	if (!inRange) {
