@@ -10,7 +10,11 @@ function log(message) {
 function pushEventLog(message) {
 	Memory.eventLog.push({ tick: Game.time, message });
 
-	const overCap = Memory.eventLog.length > config.EVENT_LOG_SIZE;
+	const configuredSize = config.EVENT_LOG_SIZE;
+	const validSize = typeof configuredSize === 'number' && Number.isFinite(configuredSize) && configuredSize > 0;
+	const maxSize = validSize ? configuredSize : 50;
+
+	const overCap = Memory.eventLog.length > maxSize;
 	if (overCap) Memory.eventLog.shift();
 }
 

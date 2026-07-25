@@ -58,10 +58,24 @@ function addRefillTasks(room, tasks) {
 	}
 }
 
+// A source has at most 8 walkable adjacent tiles, so that's the real-world ceiling on
+// concurrent harvesters regardless of what config.MAX_HARVESTERS_PER_SOURCE says. config
+// values can come from Memory (dashboard-editable, external input), so a malformed or
+// mistyped override can't be trusted to stay within a sane range.
+const MAX_HARVESTERS_HARD_CAP = 8;
+
+function clampMaxHarvesters(value) {
+	const invalid = typeof value !== 'number' || !Number.isFinite(value) || value < 0;
+	if (invalid) return 3;
+	return Math.min(value, MAX_HARVESTERS_HARD_CAP);
+}
+
 function addHarvestTasks(room, tasks) {
 	const sources = room.find(FIND_SOURCES_ACTIVE);
+	const maxHarvesters = clampMaxHarvesters(config.MAX_HARVESTERS_PER_SOURCE);
+
 	for (const source of sources) {
-		const openSlots = config.MAX_HARVESTERS_PER_SOURCE - countCreepsAssignedTo(source.id);
+		const openSlots = Math.max(0, maxHarvesters - countCreepsAssignedTo(source.id));
 		for (let slot = 0; slot < openSlots; slot++) {
 			tasks.push({
 				id: `${TASK_TYPES.HARVEST}:${source.id}:${slot}`,

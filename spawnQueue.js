@@ -34,8 +34,25 @@ function addDefenderRequest(room, requests) {
 	});
 }
 
+// config.GENERALIST_RATIO can come from Memory (dashboard-editable, external input), so a
+// malformed or mistyped ratio can't be trusted to stay within a sane range on its own.
+function clampRatioPart(value) {
+	const invalid = typeof value !== 'number' || !Number.isFinite(value) || value < 0;
+	return invalid ? 1 : Math.min(value, MAX_CREEP_SIZE);
+}
+
+function appendParts(body, partType, count) {
+	const remaining = MAX_CREEP_SIZE - body.length;
+	const safeCount = Math.min(Math.max(0, count), remaining);
+	for (let i = 0; i < safeCount; i++) body.push(partType);
+}
+
 function buildGeneralistBody(energyAvailable) {
-	const ratio = config.GENERALIST_RATIO;
+	const ratio = {
+		work: clampRatioPart(config.GENERALIST_RATIO.work),
+		carry: clampRatioPart(config.GENERALIST_RATIO.carry),
+		move: clampRatioPart(config.GENERALIST_RATIO.move),
+	};
 	const ratioSum = ratio.work + ratio.carry + ratio.move;
 	const unitCost = ratio.work * BODYPART_COST[WORK] + ratio.carry * BODYPART_COST[CARRY] + ratio.move * BODYPART_COST[MOVE];
 
@@ -44,9 +61,9 @@ function buildGeneralistBody(energyAvailable) {
 	const units = Math.max(1, Math.min(unitsByEnergy, unitsByPartLimit));
 
 	const body = [];
-	for (let i = 0; i < units * ratio.work; i++) body.push(WORK);
-	for (let i = 0; i < units * ratio.carry; i++) body.push(CARRY);
-	for (let i = 0; i < units * ratio.move; i++) body.push(MOVE);
+	appendParts(body, WORK, units * ratio.work);
+	appendParts(body, CARRY, units * ratio.carry);
+	appendParts(body, MOVE, units * ratio.move);
 	return body;
 }
 
