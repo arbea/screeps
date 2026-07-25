@@ -2,6 +2,7 @@ const config = require('./config');
 const taskQueue = require('./taskQueue');
 const creepActions = require('./creepActions');
 const spawnQueue = require('./spawnQueue');
+const mapSnapshot = require('./mapSnapshot');
 
 function cleanDeadCreepMemory() {
 	for (const name in Memory.creeps) {
@@ -33,6 +34,7 @@ module.exports.loop = function () {
 
 		taskQueue.runTaskQueue(room);
 		spawnQueue.runSpawnQueue(room, Memory.taskBacklog);
+		mapSnapshot.publishMapSnapshot(room);
 	}
 
 	for (const name in Game.creeps) {
