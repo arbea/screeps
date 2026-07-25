@@ -164,10 +164,11 @@ function countCreepsAssignedTo(targetId, taskType) {
 
 function addBuildTasks(room, tasks) {
 	for (const site of room.find(FIND_MY_CONSTRUCTION_SITES)) {
+		const priority = config.BUILD_PRIORITY_BY_TYPE[site.structureType] ?? config.PRIORITY.BUILD;
 		tasks.push({
 			id: `${TASK_TYPES.BUILD}:${site.id}`,
 			type: TASK_TYPES.BUILD,
-			priority: config.PRIORITY.BUILD,
+			priority,
 			targetId: site.id,
 		});
 	}
@@ -220,8 +221,16 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.DEFENSE || taskType === TASK_TYPES.REMOTE_DEFENSE) {
 		return partTypes.includes(ATTACK) || partTypes.includes(RANGED_ATTACK);
 	}
-	if (taskType === TASK_TYPES.HARVEST || taskType === TASK_TYPES.REMOTE_HARVEST) {
+	if (taskType === TASK_TYPES.HARVEST) {
 		return partTypes.includes(WORK);
+	}
+	// Unlike HARVEST, this must stay restricted to the 'remoteHarvester' role: that's the only
+	// body built with CARRY parts (creepBodies.buildRemoteHarvesterBody) and homeRoom memory
+	// (expansion.js). A 'miner' also has WORK parts but zero CARRY capacity and no homeRoom, so
+	// if it slipped in here runRemoteHarvest's "am I full" check reads 0/0 as permanently full
+	// and the creep just loops toward `RoomPosition(25,25,undefined)` instead of ever mining.
+	if (taskType === TASK_TYPES.REMOTE_HARVEST) {
+		return creep.memory.role === 'remoteHarvester' && partTypes.includes(WORK);
 	}
 	if (taskType === TASK_TYPES.REFILL_SPAWN || taskType === TASK_TYPES.REFILL_TOWER || taskType === TASK_TYPES.HAUL) {
 		return partTypes.includes(CARRY);

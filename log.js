@@ -18,10 +18,17 @@ function pushEventLog(message) {
 	if (overCap) Memory.eventLog.shift();
 }
 
+const ROOM_ONLY_TASK_LABELS = {
+	[TASK_TYPES.SCOUT]: '偵查',
+	[TASK_TYPES.REMOTE_DEFENSE]: '遠程防禦',
+	[TASK_TYPES.REMOTE_HARVEST]: '遠程礦源(移動中)',
+	[TASK_TYPES.RESERVE_CONTROLLER]: '佔領 Controller(移動中)',
+};
+
 function describeTask(task, target) {
 	if (!target) {
 		if (task.targetRoomName) {
-			const label = task.type === TASK_TYPES.SCOUT ? '偵查' : '遠程防禦';
+			const label = ROOM_ONLY_TASK_LABELS[task.type] || task.type;
 			return `${label} (${task.targetRoomName})`;
 		}
 		return task.type;

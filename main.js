@@ -5,6 +5,7 @@ const spawnQueue = require('./spawnQueue');
 const mapSnapshot = require('./mapSnapshot');
 const economyStats = require('./economyStats');
 const strategySnapshot = require('./strategySnapshot');
+const traffic = require('./traffic');
 const { log } = require('./log');
 
 function cleanDeadCreepMemory() {
@@ -37,6 +38,7 @@ module.exports.loop = function () {
 
 		taskQueue.runTaskQueue(room);
 		spawnQueue.runSpawnQueue(room, Memory.taskBacklog);
+		traffic.runTraffic(room);
 		mapSnapshot.publishMapSnapshot(room);
 		economyStats.publishEconomyStats(room);
 		strategySnapshot.publishStrategySnapshot(room);

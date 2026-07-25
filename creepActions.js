@@ -253,6 +253,14 @@ function runCreep(creep) {
 
 	const target = Game.getObjectById(task.targetId);
 	if (!target) {
+		// A remote target only resolves via getObjectById once its room is actually visible
+		// (a creep is standing in it). Before that first arrival there's nothing to fetch yet -
+		// that's not a dead task, just travel toward the room instead of discarding it.
+		const stillTravelingToTarget = task.targetRoomName && creep.room.name !== task.targetRoomName;
+		if (stillTravelingToTarget) {
+			creep.moveTo(new RoomPosition(25, 25, task.targetRoomName));
+			return;
+		}
 		delete creep.memory.task;
 		return;
 	}

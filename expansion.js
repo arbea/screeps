@@ -124,6 +124,7 @@ function addRemoteTasks(myUsername, tasks) {
 				type: TASK_TYPES.RESERVE_CONTROLLER,
 				priority: config.PRIORITY_RESERVE,
 				targetId: intel.controllerId,
+				targetRoomName: roomName,
 			});
 		}
 
@@ -133,6 +134,7 @@ function addRemoteTasks(myUsername, tasks) {
 				type: TASK_TYPES.REMOTE_HARVEST,
 				priority: config.PRIORITY_REMOTE_HARVEST,
 				targetId: sourceId,
+				targetRoomName: roomName,
 			});
 		}
 	}
