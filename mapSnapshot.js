@@ -11,7 +11,17 @@ function publishMapSnapshot(room) {
 		controller: room.controller ? toPoint(room.controller) : null,
 		constructionSites: room.find(FIND_MY_CONSTRUCTION_SITES).map(toPoint),
 		hostiles: room.find(FIND_HOSTILE_CREEPS).map(toPoint),
-		creeps: room.find(FIND_MY_CREEPS).map(creep => ({ x: creep.pos.x, y: creep.pos.y, name: creep.name })),
+		creeps: room.find(FIND_MY_CREEPS).map(creep => {
+			const task = creep.memory.task;
+			const target = task ? Game.getObjectById(task.targetId) : null;
+			return {
+				x: creep.pos.x,
+				y: creep.pos.y,
+				name: creep.name,
+				taskType: task ? task.type : null,
+				targetPos: target ? toPoint(target) : null,
+			};
+		}),
 	};
 }
 
