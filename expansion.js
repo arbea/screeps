@@ -1,6 +1,7 @@
 const config = require('./config');
 const TASK_TYPES = require('./taskTypes');
 const { log } = require('./log');
+const creepBodies = require('./creepBodies');
 
 function getAdjacentRoomNames(roomName) {
 	return Object.values(Game.map.describeExits(roomName) || {});
@@ -182,7 +183,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 			requests.push({
 				role: 'remoteDefender',
 				priority: config.SPAWN_PRIORITY_REMOTE_DEFENDER,
-				body: config.DEFENDER_BODY,
+				body: creepBodies.buildDefenderBody(homeRoom.energyAvailable),
 				memory: { role: 'remoteDefender', homeRoom: homeRoom.name },
 			});
 		}
@@ -204,7 +205,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 				requests.push({
 					role: 'remoteHarvester',
 					priority: config.SPAWN_PRIORITY_REMOTE_HARVESTER,
-					body: config.REMOTE_HARVESTER_BODY,
+					body: creepBodies.buildRemoteHarvesterBody(homeRoom.energyCapacityAvailable),
 					memory: { role: 'remoteHarvester', homeRoom: homeRoom.name },
 				});
 			}

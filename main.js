@@ -4,6 +4,7 @@ const creepActions = require('./creepActions');
 const spawnQueue = require('./spawnQueue');
 const mapSnapshot = require('./mapSnapshot');
 const economyStats = require('./economyStats');
+const strategySnapshot = require('./strategySnapshot');
 const { log } = require('./log');
 
 function cleanDeadCreepMemory() {
@@ -38,6 +39,7 @@ module.exports.loop = function () {
 		spawnQueue.runSpawnQueue(room, Memory.taskBacklog);
 		mapSnapshot.publishMapSnapshot(room);
 		economyStats.publishEconomyStats(room);
+		strategySnapshot.publishStrategySnapshot(room);
 	}
 
 	for (const name in Game.creeps) {

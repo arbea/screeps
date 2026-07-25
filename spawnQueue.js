@@ -2,13 +2,10 @@ const config = require('./config');
 const { logSpawn } = require('./log');
 const expansion = require('./expansion');
 const mining = require('./mining');
+const creepBodies = require('./creepBodies');
 
 function getAvailableSpawn(room) {
 	return room.find(FIND_MY_SPAWNS, { filter: spawn => !spawn.spawning })[0];
-}
-
-function countCreepsInRoom(room) {
-	return _.filter(Game.creeps, creep => creep.room.name === room.name).length;
 }
 
 function countCreepsWithBodyPart(room, partType) {
@@ -32,7 +29,7 @@ function addDefenderRequest(room, requests) {
 	requests.push({
 		role: 'defender',
 		priority: config.SPAWN_PRIORITY.DEFENDER,
-		body: config.DEFENDER_BODY,
+		body: creepBodies.buildDefenderBody(room.energyAvailable),
 	});
 }
 
@@ -120,8 +117,6 @@ function countActiveHaulers(room) {
 }
 
 function addGeneralistRequest(room, taskBacklog, requests) {
-	const atPopulationCap = countCreepsInRoom(room) >= config.MAX_CREEPS;
-	if (atPopulationCap) return;
 	if (!hasStaleBacklog(taskBacklog)) return;
 
 	// A generalist already waiting idle with nothing to carry, while every HAUL slot the map
