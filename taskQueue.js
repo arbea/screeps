@@ -3,6 +3,7 @@ const config = require('./config');
 const { logAssign, logDefense, describeTask } = require('./log');
 const expansion = require('./expansion');
 const mining = require('./mining');
+const buildOrder = require('./buildOrder');
 
 function buildTaskQueue(room) {
 	const tasks = [];
@@ -234,12 +235,13 @@ function countCreepsAssignedTo(targetId, taskType) {
 }
 
 function addBuildTasks(room, tasks) {
+	const underAttack = room.find(FIND_HOSTILE_CREEPS).length > 0;
+
 	for (const site of room.find(FIND_MY_CONSTRUCTION_SITES)) {
-		const priority = config.BUILD_PRIORITY_BY_TYPE[site.structureType] ?? config.PRIORITY.BUILD;
 		tasks.push({
 			id: `${TASK_TYPES.BUILD}:${site.id}`,
 			type: TASK_TYPES.BUILD,
-			priority,
+			priority: buildOrder.buildPriority(room, site.structureType, underAttack),
 			targetId: site.id,
 		});
 	}

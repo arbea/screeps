@@ -1,6 +1,7 @@
 const config = require('./config');
 const mining = require('./mining');
 const creepBodies = require('./creepBodies');
+const buildOrder = require('./buildOrder');
 
 function countCreepsAssignedTo(targetId, taskType) {
 	return _.filter(
@@ -75,6 +76,7 @@ function publishStrategySnapshot(room) {
 		},
 		defenderBodySize: creepBodies.buildDefenderBody(room.energyAvailable).length,
 		remoteHarvesterBodySize: creepBodies.buildRemoteHarvesterBody(room.energyCapacityAvailable).length,
+		buildOrder: buildOrder.describeBuildOrder(room),
 	};
 }
 

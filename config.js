@@ -11,23 +11,6 @@ const DEFAULTS = {
 		HARVEST_FALLBACK: 5,
 	},
 
-	// Which structure type gets built first when several construction sites compete for the
-	// same builders - a subjective development-order call, not something the map dictates, so
-	// it lives here rather than in mining.js's derived-from-state category. Values stay inside
-	// the (REPAIR, REFILL_TOWER) band so build tasks as a whole keep their existing priority
-	// relative to other task types; only the ordering within BUILD changes. Any structure type
-	// not listed falls back to the flat PRIORITY.BUILD value.
-	BUILD_PRIORITY_BY_TYPE: {
-		[STRUCTURE_SPAWN]: 68,
-		[STRUCTURE_TOWER]: 64,
-		[STRUCTURE_EXTENSION]: 60,
-		[STRUCTURE_STORAGE]: 55,
-		[STRUCTURE_CONTAINER]: 52,
-		[STRUCTURE_ROAD]: 48,
-		[STRUCTURE_RAMPART]: 45,
-		[STRUCTURE_WALL]: 42,
-	},
-
 	SPAWN_PRIORITY: {
 		DEFENDER: 100,
 		MINER: 95,
