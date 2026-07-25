@@ -1,6 +1,7 @@
 const TASK_TYPES = require('./taskTypes');
 const config = require('./config');
 const { logAssign, logDefense, describeTask } = require('./log');
+const expansion = require('./expansion');
 
 function buildTaskQueue(room) {
 	const tasks = [];
@@ -11,6 +12,7 @@ function buildTaskQueue(room) {
 	addBuildTasks(room, tasks);
 	addRepairTasks(room, tasks);
 	addUpgradeTask(room, tasks);
+	tasks.push(...expansion.runExpansion(room));
 
 	tasks.sort((a, b) => b.priority - a.priority);
 	return tasks;
@@ -146,20 +148,32 @@ function addUpgradeTask(room, tasks) {
 function hasCapabilityForTask(creep, taskType) {
 	const partTypes = _.map(creep.body, part => part.type);
 
-	if (taskType === TASK_TYPES.DEFENSE) {
+	if (taskType === TASK_TYPES.DEFENSE || taskType === TASK_TYPES.REMOTE_DEFENSE) {
 		return partTypes.includes(ATTACK) || partTypes.includes(RANGED_ATTACK);
 	}
-	if (taskType === TASK_TYPES.HARVEST) {
+	if (taskType === TASK_TYPES.HARVEST || taskType === TASK_TYPES.REMOTE_HARVEST) {
 		return partTypes.includes(WORK);
 	}
 	if (taskType === TASK_TYPES.REFILL_SPAWN || taskType === TASK_TYPES.REFILL_TOWER) {
 		return partTypes.includes(CARRY);
 	}
+	if (taskType === TASK_TYPES.SCOUT) {
+		return creep.memory.role === 'scout';
+	}
+	if (taskType === TASK_TYPES.RESERVE_CONTROLLER) {
+		return partTypes.includes(CLAIM);
+	}
 	return partTypes.includes(WORK) && partTypes.includes(CARRY);
 }
 
 function isCreepReadyForTask(creep, taskType) {
-	const gatheringTask = taskType === TASK_TYPES.HARVEST || taskType === TASK_TYPES.DEFENSE;
+	const gatheringTask =
+		taskType === TASK_TYPES.HARVEST ||
+		taskType === TASK_TYPES.DEFENSE ||
+		taskType === TASK_TYPES.REMOTE_HARVEST ||
+		taskType === TASK_TYPES.REMOTE_DEFENSE ||
+		taskType === TASK_TYPES.SCOUT ||
+		taskType === TASK_TYPES.RESERVE_CONTROLLER;
 	if (gatheringTask) return true;
 
 	return creep.store[RESOURCE_ENERGY] > 0;

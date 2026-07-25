@@ -1,0 +1,216 @@
+const config = require('./config');
+const TASK_TYPES = require('./taskTypes');
+const { log } = require('./log');
+
+function getAdjacentRoomNames(roomName) {
+	return Object.values(Game.map.describeExits(roomName) || {});
+}
+
+// Scans every currently-visible non-owned room (a room only shows up in Game.rooms when a
+// creep is physically there, so this never spends CPU "looking" for rooms - it just records
+// what we already have visibility into for free) and remembers it for future scoring.
+function updateRoomIntel() {
+	if (!Memory.rooms) Memory.rooms = {};
+
+	for (const roomName in Game.rooms) {
+		const room = Game.rooms[roomName];
+		const owned = room.controller && room.controller.my;
+		if (owned) continue;
+
+		const sources = room.find(FIND_SOURCES);
+		Memory.rooms[roomName] = {
+			lastSeen: Game.time,
+			sourceIds: sources.map(source => source.id),
+			controllerId: room.controller ? room.controller.id : null,
+			owner: room.controller && room.controller.owner ? room.controller.owner.username : null,
+			reservedBy: room.controller && room.controller.reservation ? room.controller.reservation.username : null,
+			hostileCount: room.find(FIND_HOSTILE_CREEPS).length,
+		};
+	}
+}
+
+function scoreRoom(roomName) {
+	const intel = Memory.rooms[roomName];
+	if (!intel) return -Infinity;
+
+	const disqualified = !!intel.owner || intel.sourceIds.length < config.MIN_SOURCES_FOR_REMOTE;
+	if (disqualified) return -Infinity;
+
+	return intel.sourceIds.length * 10 - intel.hostileCount * 100;
+}
+
+// Adjacent room names are inherently capped at 4 (one per compass direction), so this can
+// never grow the candidate pool beyond a handful of comparisons regardless of config values.
+function pickBestUnclaimedCandidate(homeRoomName) {
+	const active = new Set(Memory.remoteRooms);
+	let best = null;
+	let bestScore = -Infinity;
+
+	for (const roomName of getAdjacentRoomNames(homeRoomName)) {
+		if (active.has(roomName)) continue;
+		const score = scoreRoom(roomName);
+		if (score > bestScore) {
+			bestScore = score;
+			best = roomName;
+		}
+	}
+	return bestScore > -Infinity ? best : null;
+}
+
+function pickUnscoutedAdjacent(homeRoomName) {
+	return getAdjacentRoomNames(homeRoomName).find(roomName => !Memory.rooms[roomName]);
+}
+
+function maxRemoteRooms() {
+	// Adjacent rooms are naturally capped at 4; clamp regardless in case Memory.config carries
+	// a malformed override, matching the defensive posture adopted after the CPU incident.
+	const value = config.MAX_REMOTE_ROOMS;
+	const invalid = typeof value !== 'number' || !Number.isFinite(value) || value < 0;
+	return invalid ? 2 : Math.min(value, 4);
+}
+
+function maintainRemoteRoomList(homeRoomName) {
+	if (!Memory.remoteRooms) Memory.remoteRooms = [];
+
+	Memory.remoteRooms = Memory.remoteRooms.filter(roomName => {
+		const stillGood = scoreRoom(roomName) > -Infinity;
+		if (!stillGood) log(`[撤退] 放棄遠程房間 ${roomName}(不再適合開採)`);
+		return stillGood;
+	});
+
+	const hasSlot = Memory.remoteRooms.length < maxRemoteRooms();
+	if (!hasSlot) return;
+
+	const candidate = pickBestUnclaimedCandidate(homeRoomName);
+	if (candidate) {
+		Memory.remoteRooms.push(candidate);
+		log(`[擴張] 選定遠程開採目標:${candidate}`);
+	}
+}
+
+function addScoutTask(homeRoom, tasks) {
+	const hasSlot = (Memory.remoteRooms || []).length < maxRemoteRooms();
+	if (!hasSlot) return;
+
+	const target = pickUnscoutedAdjacent(homeRoom.name);
+	if (!target) return;
+
+	tasks.push({
+		id: `${TASK_TYPES.SCOUT}:${target}`,
+		type: TASK_TYPES.SCOUT,
+		priority: config.PRIORITY_SCOUT,
+		targetRoomName: target,
+	});
+}
+
+function addRemoteTasks(myUsername, tasks) {
+	for (const roomName of Memory.remoteRooms || []) {
+		const intel = Memory.rooms[roomName];
+		if (!intel) continue;
+
+		if (intel.hostileCount > 0 && config.DEFEND_REMOTE_ROOMS) {
+			tasks.push({
+				id: `${TASK_TYPES.REMOTE_DEFENSE}:${roomName}`,
+				type: TASK_TYPES.REMOTE_DEFENSE,
+				priority: config.PRIORITY_REMOTE_DEFENSE,
+				targetRoomName: roomName,
+			});
+		}
+
+		const needsReservation = intel.controllerId && intel.reservedBy !== myUsername;
+		if (needsReservation) {
+			tasks.push({
+				id: `${TASK_TYPES.RESERVE_CONTROLLER}:${roomName}`,
+				type: TASK_TYPES.RESERVE_CONTROLLER,
+				priority: config.PRIORITY_RESERVE,
+				targetId: intel.controllerId,
+			});
+		}
+
+		for (const sourceId of intel.sourceIds) {
+			tasks.push({
+				id: `${TASK_TYPES.REMOTE_HARVEST}:${sourceId}`,
+				type: TASK_TYPES.REMOTE_HARVEST,
+				priority: config.PRIORITY_REMOTE_HARVEST,
+				targetId: sourceId,
+			});
+		}
+	}
+}
+
+function runExpansion(homeRoom) {
+	if (!config.EXPANSION_ENABLED) return [];
+
+	const isExpansionTick = Game.time % config.EXPANSION_INTERVAL === 0;
+	if (isExpansionTick) {
+		updateRoomIntel();
+		maintainRemoteRoomList(homeRoom.name);
+	}
+
+	const myUsername = homeRoom.controller.owner.username;
+	const tasks = [];
+	addScoutTask(homeRoom, tasks);
+	addRemoteTasks(myUsername, tasks);
+	return tasks;
+}
+
+function countCreepsWithRole(role) {
+	return _.filter(Game.creeps, creep => creep.memory.role === role).length;
+}
+
+function countCreepsAssignedTo(targetId) {
+	return _.filter(Game.creeps, creep => creep.memory.task && creep.memory.task.targetId === targetId).length;
+}
+
+function getExpansionSpawnRequests(homeRoom, myUsername) {
+	const requests = [];
+	if (!config.EXPANSION_ENABLED) return requests;
+
+	const unscouted = pickUnscoutedAdjacent(homeRoom.name);
+	const needsScout = unscouted && countCreepsWithRole('scout') === 0 && (Memory.remoteRooms || []).length < maxRemoteRooms();
+	if (needsScout) {
+		requests.push({ role: 'scout', priority: config.SPAWN_PRIORITY_SCOUT, body: config.SCOUT_BODY, memory: { role: 'scout' } });
+	}
+
+	for (const roomName of Memory.remoteRooms || []) {
+		const intel = Memory.rooms[roomName];
+		if (!intel) continue;
+
+		const underAttack = intel.hostileCount > 0 && config.DEFEND_REMOTE_ROOMS;
+		if (underAttack && countCreepsWithRole('remoteDefender') === 0) {
+			requests.push({
+				role: 'remoteDefender',
+				priority: config.SPAWN_PRIORITY_REMOTE_DEFENDER,
+				body: config.DEFENDER_BODY,
+				memory: { role: 'remoteDefender', homeRoom: homeRoom.name },
+			});
+		}
+
+		const needsReservation = intel.controllerId && intel.reservedBy !== myUsername;
+		const hasReserver = _.filter(Game.creeps, creep => creep.memory.role === 'reserver' && creep.memory.targetRoom === roomName).length > 0;
+		if (needsReservation && !hasReserver) {
+			requests.push({
+				role: 'reserver',
+				priority: config.SPAWN_PRIORITY_RESERVER,
+				body: config.RESERVER_BODY,
+				memory: { role: 'reserver', targetRoom: roomName },
+			});
+		}
+
+		for (const sourceId of intel.sourceIds) {
+			const hasHarvester = countCreepsAssignedTo(sourceId) > 0;
+			if (!hasHarvester) {
+				requests.push({
+					role: 'remoteHarvester',
+					priority: config.SPAWN_PRIORITY_REMOTE_HARVESTER,
+					body: config.REMOTE_HARVESTER_BODY,
+					memory: { role: 'remoteHarvester', homeRoom: homeRoom.name },
+				});
+			}
+		}
+	}
+
+	return requests;
+}
+
+module.exports = { runExpansion, getExpansionSpawnRequests };

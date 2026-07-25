@@ -1,5 +1,6 @@
 const config = require('./config');
 const { logSpawn } = require('./log');
+const expansion = require('./expansion');
 
 function getAvailableSpawn(room) {
 	return room.find(FIND_MY_SPAWNS, { filter: spawn => !spawn.spawning })[0];
@@ -84,6 +85,9 @@ function getSpawnRequests(room, taskBacklog) {
 	addDefenderRequest(room, requests);
 	addGeneralistRequest(room, taskBacklog, requests);
 
+	const myUsername = room.controller.owner.username;
+	requests.push(...expansion.getExpansionSpawnRequests(room, myUsername));
+
 	requests.sort((a, b) => b.priority - a.priority);
 	return requests;
 }
@@ -97,14 +101,16 @@ function runSpawnQueue(room, taskBacklog) {
 	if (!spawn) return;
 	if (room.energyAvailable < config.MIN_ENERGY_TO_SPAWN) return;
 
-	const request = getSpawnRequests(room, taskBacklog)[0];
+	// Pick the highest-priority request we can actually afford, not just the top request -
+	// otherwise one expensive high-priority body (e.g. a CLAIM-part reserver) permanently
+	// blocks every cheaper request behind it whenever the room can't yet afford it.
+	const requests = getSpawnRequests(room, taskBacklog);
+	const request = requests.find(candidate => room.energyAvailable >= bodyCost(candidate.body));
 	if (!request) return;
 
 	const cost = bodyCost(request.body);
-	if (room.energyAvailable < cost) return;
-
 	const name = `${request.role}_${Game.time}`;
-	spawn.spawnCreep(request.body, name, { memory: {} });
+	spawn.spawnCreep(request.body, name, { memory: request.memory || {} });
 	logSpawn(request.role, name, cost);
 }
 

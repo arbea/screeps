@@ -19,7 +19,13 @@ function pushEventLog(message) {
 }
 
 function describeTask(task, target) {
-	if (!target) return task.type;
+	if (!target) {
+		if (task.targetRoomName) {
+			const label = task.type === TASK_TYPES.SCOUT ? '偵查' : '遠程防禦';
+			return `${label} (${task.targetRoomName})`;
+		}
+		return task.type;
+	}
 
 	switch (task.type) {
 		case TASK_TYPES.HARVEST:
@@ -36,6 +42,10 @@ function describeTask(task, target) {
 			return 'Controller 升級';
 		case TASK_TYPES.DEFENSE:
 			return target.owner ? target.owner.username : '不明敵人';
+		case TASK_TYPES.RESERVE_CONTROLLER:
+			return `佔領 Controller (${target.pos.roomName})`;
+		case TASK_TYPES.REMOTE_HARVEST:
+			return `遠程礦源 (${target.pos.roomName} ${target.pos.x},${target.pos.y})`;
 		default:
 			return task.type;
 	}
