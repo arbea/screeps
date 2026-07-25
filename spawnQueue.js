@@ -1,6 +1,7 @@
 const config = require('./config');
 const { logSpawn } = require('./log');
 const expansion = require('./expansion');
+const mining = require('./mining');
 
 function getAvailableSpawn(room) {
 	return room.find(FIND_MY_SPAWNS, { filter: spawn => !spawn.spawning })[0];
@@ -68,19 +69,8 @@ function buildGeneralistBody(energyAvailable) {
 	return body;
 }
 
-function clampMinerWorkCount(value) {
-	const invalid = typeof value !== 'number' || !Number.isFinite(value) || value < 1;
-	return invalid ? 5 : Math.min(value, 5);
-}
-
 function buildMinerBody(energyCapacity) {
-	const workCost = BODYPART_COST[WORK];
-	const moveCost = BODYPART_COST[MOVE];
-	const maxWork = clampMinerWorkCount(config.MINER_MAX_WORK);
-
-	const affordableWork = Math.floor((energyCapacity - moveCost) / workCost);
-	const workCount = Math.max(1, Math.min(affordableWork, maxWork));
-
+	const workCount = mining.minerWorkCount(energyCapacity);
 	const body = [];
 	for (let i = 0; i < workCount; i++) body.push(WORK);
 	body.push(MOVE);
@@ -88,9 +78,10 @@ function buildMinerBody(energyCapacity) {
 }
 
 function addMinerRequest(room, requests) {
-	const sourceCount = room.find(FIND_SOURCES_ACTIVE).length;
+	const sources = room.find(FIND_SOURCES_ACTIVE);
+	const totalMinerSlots = sources.reduce((sum, source) => sum + mining.maxMinersForSource(room, source), 0);
 	const minerCount = _.filter(Game.creeps, creep => creep.memory.role === 'miner' && creep.room.name === room.name).length;
-	const needsMiner = minerCount < sourceCount;
+	const needsMiner = minerCount < totalMinerSlots;
 	if (!needsMiner) return;
 
 	requests.push({

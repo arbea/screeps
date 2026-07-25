@@ -2,6 +2,7 @@ const TASK_TYPES = require('./taskTypes');
 const config = require('./config');
 const { logAssign, logDefense, describeTask } = require('./log');
 const expansion = require('./expansion');
+const mining = require('./mining');
 
 function buildTaskQueue(room) {
 	const tasks = [];
@@ -71,10 +72,16 @@ function addMiningTasks(room, tasks) {
 	for (const source of sources) {
 		ensureContainerSite(room, source);
 
-		const hasMiner = countCreepsAssignedTo(source.id, TASK_TYPES.MINE) > 0;
-		if (!hasMiner) {
+		// How many miners a source supports is capped by whichever is smaller: how many
+		// walkable tiles surround it, or how many are needed to saturate its regen rate given
+		// the current (energy-capacity-limited) miner body size - extra miners beyond either
+		// limit don't add throughput, they just crowd the tile.
+		const maxMiners = mining.maxMinersForSource(room, source);
+		const currentMiners = countCreepsAssignedTo(source.id, TASK_TYPES.MINE);
+		const openMinerSlots = Math.max(0, maxMiners - currentMiners);
+		for (let slot = 0; slot < openMinerSlots; slot++) {
 			tasks.push({
-				id: `${TASK_TYPES.MINE}:${source.id}`,
+				id: `${TASK_TYPES.MINE}:${source.id}:${currentMiners + slot}`,
 				type: TASK_TYPES.MINE,
 				priority: config.PRIORITY.HARVEST,
 				targetId: source.id,
@@ -116,23 +123,10 @@ function ensureContainerSite(room, source) {
 }
 
 function placeContainerNear(room, source) {
-	const terrain = room.getTerrain();
+	const tile = mining.getAccessibleTiles(room, source.pos)[0];
+	if (!tile) return;
 
-	for (let dx = -1; dx <= 1; dx++) {
-		for (let dy = -1; dy <= 1; dy++) {
-			const isSourceTile = dx === 0 && dy === 0;
-			if (isSourceTile) continue;
-
-			const x = source.pos.x + dx;
-			const y = source.pos.y + dy;
-			const inBounds = x >= 1 && x <= 48 && y >= 1 && y <= 48;
-			if (!inBounds) continue;
-			if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
-
-			room.createConstructionSite(x, y, STRUCTURE_CONTAINER);
-			return;
-		}
-	}
+	room.createConstructionSite(tile.x, tile.y, STRUCTURE_CONTAINER);
 }
 
 function countCreepsAssignedTo(targetId, taskType) {
