@@ -13,11 +13,17 @@ const ally = require('./ally');
 const traffic = require('./traffic');
 const sourceLoss = require('./sourceLoss');
 const idleStats = require('./idleStats');
+const energyLedger = require('./energyLedger');
 
 function cleanDeadCreepMemory() {
 	for (const name in Memory.creeps) {
 		const creepIsDead = !(name in Game.creeps);
-		if (creepIsDead) delete Memory.creeps[name];
+		if (creepIsDead) {
+			// Whatever it was carrying died with it - waste, unless a hauler loots the tombstone,
+			// which books the recovery as salvage income and nets the two out.
+			energyLedger.record('death', Memory.creeps[name].carrying || 0);
+			delete Memory.creeps[name];
+		}
 	}
 }
 
@@ -70,6 +76,9 @@ function runColonies(mode) {
 		// specific tick, so a cycle skipped for CPU is one whose waste can never be recovered - the
 		// reading after the gap cannot say what was left behind during it.
 		sourceLoss.run(room);
+		// Same rule for the ledger: income is a per-tick delta on the source and decay lands every
+		// tick, so a skipped tick is booked income lost for good.
+		energyLedger.run(room);
 
 		if (!essentialOnly) {
 			traffic.runTraffic(room, mode);

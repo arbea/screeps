@@ -3,6 +3,7 @@ const { logDone } = require('./log');
 const { checkAndHandleStall } = require('./stallDetection');
 const hostiles = require('./hostiles');
 const logistics = require('./logistics');
+const energyLedger = require('./energyLedger');
 
 function runDefense(creep, hostile) {
 	const inRange = creep.pos.inRangeTo(hostile, 1);
@@ -56,7 +57,13 @@ function runBuild(creep, site) {
 		creep.moveTo(site);
 		return false;
 	}
-	creep.build(site);
+	// The intent's spend, counted only when the intent is accepted. BUILD_POWER per WORK, capped
+	// by what the creep holds and what the site still needs - the same caps the game applies.
+	const built = creep.build(site) === OK;
+	if (built) {
+		const workParts = creep.getActiveBodyparts(WORK);
+		energyLedger.record('build', Math.min(workParts * BUILD_POWER, creep.store[RESOURCE_ENERGY], site.progressTotal - site.progress));
+	}
 	return false;
 }
 
@@ -72,7 +79,17 @@ function runRepair(creep, structure) {
 		creep.moveTo(structure);
 		return false;
 	}
-	creep.repair(structure);
+	// One energy per WORK per repair tick (REPAIR_POWER hits at REPAIR_COST each), capped by the
+	// hits actually missing and the energy actually held.
+	const repairing = creep.repair(structure) === OK;
+	if (repairing) {
+		const workParts = creep.getActiveBodyparts(WORK);
+		energyLedger.record('repair', Math.min(
+			workParts * REPAIR_POWER * REPAIR_COST,
+			creep.store[RESOURCE_ENERGY],
+			Math.ceil((structure.hitsMax - structure.hits) * REPAIR_COST)
+		));
+	}
 	return false;
 }
 
@@ -128,7 +145,12 @@ function deliverEnergyHome(creep) {
 		creep.moveTo(spawn);
 		return false;
 	}
-	creep.transfer(spawn, RESOURCE_ENERGY);
+	// Remote income enters the economy here, not at the foreign rock - energy lost on the road
+	// home was never income.
+	const delivered = creep.transfer(spawn, RESOURCE_ENERGY) === OK;
+	if (delivered) {
+		energyLedger.record('remote', Math.min(creep.store[RESOURCE_ENERGY], spawn.store.getFreeCapacity(RESOURCE_ENERGY)));
+	}
 	return true;
 }
 
@@ -224,8 +246,18 @@ function collectFrom(creep, supply) {
 	const target = Game.getObjectById(supply.id);
 	if (!target) return false;
 
-	if (target.amount !== undefined) creep.pickup(target);
-	else creep.withdraw(target, RESOURCE_ENERGY);
+	if (target.amount !== undefined) {
+		creep.pickup(target);
+	} else {
+		// Tombstones and ruins are the one supply that never passed through a source we metered,
+		// so emptying them is income in its own right - and the offset that turns a looted
+		// corpse's death loss back into a net figure.
+		const grave = target.deathTime !== undefined || target.destroyTime !== undefined;
+		const withdrawn = creep.withdraw(target, RESOURCE_ENERGY) === OK;
+		if (grave && withdrawn) {
+			energyLedger.record('salvage', Math.min(creep.store.getFreeCapacity(RESOURCE_ENERGY), target.store[RESOURCE_ENERGY]));
+		}
+	}
 	return false;
 }
 
@@ -274,7 +306,14 @@ function runRecycle(creep, spawn) {
 		creep.moveTo(spawn);
 		return false;
 	}
-	spawn.recycleCreep(creep);
+	const recycled = spawn.recycleCreep(creep) === OK;
+	if (recycled) {
+		// An estimate, stated as one: the game refunds a share of the build cost scaled by the
+		// life the creep had left, dropped where it stood. Booked here because the pile it lands
+		// in never touches a metered source.
+		const bodyCost = creep.body.reduce((sum, part) => sum + BODYPART_COST[part.type], 0);
+		energyLedger.record('recycle', Math.floor((bodyCost / 2) * ((creep.ticksToLive || 0) / CREEP_LIFE_TIME)));
+	}
 	return false;
 }
 
@@ -334,6 +373,13 @@ function standByForRelief(creep) {
 }
 
 function runCreep(creep) {
+	// The cargo a creep dies with is only knowable if it was written down while it lived - the
+	// corpse's store is gone by the time the memory sweep sees the death. Kept only while
+	// non-zero so empty creeps don't grow a permanent field.
+	const carrying = creep.store[RESOURCE_ENERGY];
+	if (carrying > 0) creep.memory.carrying = carrying;
+	else if (creep.memory.carrying !== undefined) delete creep.memory.carrying;
+
 	const task = creep.memory.task;
 	if (!task) {
 		standByForRelief(creep);

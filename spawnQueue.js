@@ -5,6 +5,7 @@ const creepBodies = require('./creepBodies');
 const hostiles = require('./hostiles');
 const spawnOrder = require('./spawnOrder');
 const population = require('./population');
+const energyLedger = require('./energyLedger');
 
 function getAvailableSpawn(room) {
 	return room.find(FIND_MY_SPAWNS, { filter: spawn => !spawn.spawning })[0];
@@ -126,7 +127,10 @@ function runSpawnQueue(room) {
 	const cost = creepBodies.bodyCost(request.body);
 	const name = `${request.role}_${Game.time}`;
 	const spawned = spawn.spawnCreep(request.body, name, { memory: request.memory }) === OK;
-	if (spawned) logSpawn(request.role, name, cost);
+	if (spawned) {
+		logSpawn(request.role, name, cost);
+		energyLedger.record('spawn', cost);
+	}
 }
 
 module.exports = { runSpawnQueue };

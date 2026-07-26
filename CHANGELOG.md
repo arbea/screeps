@@ -77,3 +77,5 @@ changes are recorded only here.
 - Poll no faster than the self-cap can afford (150s, 24/hour against a 30/hour cap), and report a local self-cap pause as a pause with a countdown - not as a Screeps API error, which it never was.
 - Decouple page views from API spending entirely: Screeps is polled on a fixed 155-second schedule whether anyone is watching or not, and every page request just re-renders the latest cache.
 - Judge creep idleness as a share of lifetime - under 5% good, above needs adjusting - on the 300-tick rolling window, replacing the absolute 10-second mark.
+- Account for every energy flow (energyLedger.js): income at the source's own drain, spending at the intent that spends it, waste at the moment it becomes unrecoverable - regen leftovers, ground decay, cargo dying with its creep, downgrade ticks.
+- Judge T3 as total waste over total production against the same 5%/10% marks, and draw the account as two donut charts - income and spend, waste as one red slice with its breakdown in labeled rows beneath.
