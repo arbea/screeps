@@ -121,11 +121,13 @@ function mergeIntel(message) {
 		const theirsIsNewer = !known || (incoming.lastSeen || message.tick) > (known.lastSeen || 0);
 		if (!theirsIsNewer) continue;
 
+		// Everything they sent is kept, not just the fields we happen to send ourselves. An ally
+		// running a different bot records things we don't - controller level, combat parts, terrain
+		// scoring - and cherry-picking three known keys would throw that away for no reason. Ours
+		// stays underneath, so a field they omit keeps whatever we already knew.
 		Memory.rooms[roomName] = {
 			...(known || {}),
-			towers: incoming.towers,
-			towerEnergy: incoming.towerEnergy,
-			spawns: incoming.spawns,
+			...incoming,
 			lastSeen: incoming.lastSeen || message.tick,
 			viaAlly: true,
 		};
