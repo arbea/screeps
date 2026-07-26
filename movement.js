@@ -36,9 +36,20 @@ function destinationOf(target) {
 	return target.pos || target;
 }
 
+// Structures change on the order of hundreds of ticks - one extension finished, one road laid -
+// but the matrix describing them was rebuilt from a full FIND_STRUCTURES scan on every single
+// search. With twenty creeps re-pathing, that is the same room walked dozens of times a tick to
+// learn something that did not change. Cached for as long as a structure scan stays true
+// elsewhere in the bot (mapSnapshot uses the same interval for the same reason).
+const MATRIX_CACHE_TICKS = 50;
+
+// Heap, not Memory: a CostMatrix is a 2500-byte typed array, and Memory is serialised to JSON
+// every tick. Losing the cache to a global reset costs one rebuild, which is what it cost before.
+const matrixCache = {};
+
 // PathFinder knows nothing about structures on its own - whatever the cost matrix doesn't mention
 // is walkable to it. So every search has to start from this matrix, whatever else it adds on top.
-function structureCosts(room) {
+function buildStructureCosts(room) {
 	const costs = new PathFinder.CostMatrix();
 	for (const structure of room.find(FIND_STRUCTURES)) {
 		// Roads are what the traffic survey builds; pathing has to prefer them or laying
@@ -51,17 +62,66 @@ function structureCosts(room) {
 	return costs;
 }
 
+// Construction finishing is the one structure change the bot causes itself and cares about
+// immediately - a new extension the router still thinks is open ground is exactly the wall a
+// creep gets told to walk through. Counting sites is far cheaper than rebuilding the matrix, so
+// the count is the cache's freshness check between scheduled rebuilds.
+function structureCosts(room) {
+	const cached = matrixCache[room.name];
+	const siteCount = room.find(FIND_MY_CONSTRUCTION_SITES).length;
+	const fresh = cached && Game.time - cached.builtAt < MATRIX_CACHE_TICKS && cached.siteCount === siteCount;
+	if (fresh) return cached.costs;
+
+	matrixCache[room.name] = { costs: buildStructureCosts(room), builtAt: Game.time, siteCount };
+	return matrixCache[room.name].costs;
+}
+
+// What a step actually costs is time, not distance, and time depends on the body. Each non-MOVE
+// part generates 1 fatigue on road, 2 on plain, 10 on swamp; each MOVE part clears 2 per tick. So
+// a 5-WORK/1-MOVE miner pays 3 ticks a step on road and 5 on plain, while a 1:1 hauler pays one
+// tick on either - meaning the hauler gains nothing from a detour onto a road, and taking one
+// costs it real time. Fixed weights of 2 and 10 described neither creep.
+//
+// Costs are expressed relative to a road step (the matrix marks roads 1), which is what lets the
+// cached room matrix stay shared while each creep routes on its own clock. Cached on the creep
+// because a body never changes.
+function terrainCostsFor(creep) {
+	const cached = creep.memory._terrain;
+	if (cached) return cached;
+
+	let moveParts = 0;
+	let heavyParts = 0;
+	for (const part of creep.body) {
+		if (part.type === MOVE) moveParts++;
+		else heavyParts++;
+	}
+
+	// No legs at all: nothing to weigh, and the engine's defaults are as good a guess as any.
+	if (moveParts === 0) return { plainCost: 2, swampCost: 10 };
+
+	const ticks = generated => Math.max(1, Math.ceil((heavyParts * generated) / (2 * moveParts)));
+	const road = ticks(1);
+	const costs = {
+		plainCost: Math.max(1, Math.min(254, Math.round(ticks(2) / road))),
+		swampCost: Math.max(1, Math.min(254, Math.round(ticks(10) / road))),
+	};
+
+	creep.memory._terrain = costs;
+	return costs;
+}
+
 // The whole point of the override: a route is computed once and then followed from memory. Calling
 // moveTo every tick recomputes the same path from a position one step further along, which is the
 // same answer at full price - and at 20 CPU a tick with twenty creeps, it is most of the budget.
 function findPath(creep, destination, range) {
+	const terrain = terrainCostsFor(creep);
 	const result = PathFinder.search(
 		creep.pos,
 		{ pos: destination, range },
 		{
 			maxOps: maxOps(),
-			plainCost: 2,
-			swampCost: 10,
+			plainCost: terrain.plainCost,
+			swampCost: terrain.swampCost,
 			roomCallback(roomName) {
 				const room = Game.rooms[roomName];
 				if (!room) return;
@@ -84,17 +144,21 @@ function findPath(creep, destination, range) {
 // matrix two ticks later, and got the same path back. The miner that spent 349 ticks two tiles
 // from its spawn point died of exactly this.
 function findPathAroundCreeps(creep, destination, range) {
+	const terrain = terrainCostsFor(creep);
 	const result = PathFinder.search(
 		creep.pos,
 		{ pos: destination, range },
 		{
 			maxOps: maxOps(),
-			plainCost: 2,
-			swampCost: 10,
+			plainCost: terrain.plainCost,
+			swampCost: terrain.swampCost,
 			roomCallback(roomName) {
 				if (roomName !== creep.room.name) return;
 
-				const costs = structureCosts(creep.room);
+				// Cloned, never written through: the cached matrix is shared by every creep in the
+				// room, and stamping this tick's bodies into it would leave them there as permanent
+				// walls long after they walked away.
+				const costs = structureCosts(creep.room).clone();
 				for (const other of creep.room.find(FIND_CREEPS)) {
 					costs.set(other.pos.x, other.pos.y, 0xff);
 				}

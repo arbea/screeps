@@ -84,3 +84,7 @@ changes are recorded only here.
 - Grow T5 into base-development progress: downgrade clock, safemode, power flag, the full build table with next-level unlocks and the not-yet roadmap, relic-wall backlog, and the upgrade ETA in wall-clock time.
 - Start LAYOUT.md - the LLM-curated bunker blueprint record; the layout is deliberately not a bot module, positions get built only once written down and dated there.
 - Price hour-TTL cache writes at their real 2x rate (1.25 was the five-minute figure), and calibrate on deltas when two official readings land in the same window - differencing cancels both weight error and the usage this machine's transcripts never see.
+- Route by time rather than distance: each creep's terrain costs are derived from its own body (fatigue per step on road/plain/swamp), so a 1:1 hauler stops detouring onto roads that buy it nothing while a 5-WORK miner still prefers them.
+- Cache the room's structure cost matrix instead of rebuilding it from a full structure scan on every path search, invalidated on the construction-site count and every 50 ticks.
+- Make loose energy, tombstones, and ruins their own task type instead of only a supply for haulers already carrying a delivery - a pile with no sink to feed used to sit there evaporating.
+- Narrow the AI usage band to 80-90% (was 85-95%).

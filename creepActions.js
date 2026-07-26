@@ -261,6 +261,34 @@ function collectFrom(creep, supply) {
 	return false;
 }
 
+// Collecting a pile is one action once the creep is standing next to it, so the task ends as soon
+// as it acts: the creep goes straight back to the queue carrying energy, which is what makes it
+// eligible for the delivery, build or upgrade that should follow. Ending on a full store matters
+// for the same reason - a creep that cannot hold any more of a large pile should be spending what
+// it has rather than standing over the rest.
+function runPickup(creep, pile) {
+	const full = creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
+	if (full) return true;
+
+	const inRange = creep.pos.isNearTo(pile);
+	if (!inRange) {
+		creep.moveTo(pile);
+		return false;
+	}
+
+	// A loose pile is picked up; a tombstone or ruin is withdrawn from - and unlike loose energy,
+	// a grave's contents never passed through a metered source, so emptying one is income.
+	if (pile.amount !== undefined) {
+		creep.pickup(pile);
+		return true;
+	}
+
+	const taken = Math.min(creep.store.getFreeCapacity(RESOURCE_ENERGY), pile.store[RESOURCE_ENERGY]);
+	const withdrawn = creep.withdraw(pile, RESOURCE_ENERGY) === OK;
+	if (withdrawn) energyLedger.record('salvage', taken);
+	return true;
+}
+
 // The hauler belongs to no source. Its task names only where the energy is going; where it comes
 // from is chosen fresh each trip from whatever the ledger scores highest, so an emptied source
 // simply stops being picked and its haulers move to another without anyone reassigning them.
@@ -342,6 +370,7 @@ const ACTIONS = {
 	[TASK_TYPES.REFILL_TOWER]: runRefill,
 	[TASK_TYPES.MINE]: runMine,
 	[TASK_TYPES.HAUL]: runHaul,
+	[TASK_TYPES.PICKUP]: runPickup,
 	[TASK_TYPES.BUILD]: runBuild,
 	[TASK_TYPES.REPAIR]: runRepair,
 	[TASK_TYPES.UPGRADE]: runUpgrade,

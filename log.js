@@ -49,6 +49,11 @@ function describeTask(task, target) {
 			return `遠程礦源 (${target.pos.roomName} ${target.pos.x},${target.pos.y})`;
 		case TASK_TYPES.MINE:
 			return `駐守開採 (${target.pos.x},${target.pos.y})`;
+		case TASK_TYPES.PICKUP:
+			// A loose pile reports .amount; a tombstone or ruin reports a store.
+			return target.amount !== undefined
+				? `撿拾掉落能量 ${target.amount} (${target.pos.x},${target.pos.y})`
+				: `搜刮遺骸 ${target.store[RESOURCE_ENERGY]} (${target.pos.x},${target.pos.y})`;
 		case TASK_TYPES.HAUL:
 			return `搬運能量 (${target.pos.x},${target.pos.y})`;
 		case TASK_TYPES.RECYCLE:

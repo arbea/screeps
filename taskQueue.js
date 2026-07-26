@@ -17,6 +17,7 @@ function buildTaskQueue(room) {
 	// refill task aimed at the same structures would double-deliver, since in-transit energy is
 	// only deducted for haul tasks.
 	logistics.addHaulTasks(room, tasks);
+	addPickupTasks(room, tasks);
 	addMiningTasks(room, tasks);
 	addBuildTasks(room, tasks);
 	addRepairTasks(room, tasks);
@@ -39,6 +40,36 @@ function addDefenseTasks(room, tasks) {
 		priority: taskOrder.basePriority(TASK_TYPES.DEFENSE),
 		targetId: target.id,
 	});
+}
+
+// Loose energy was only ever a supply for haulers already holding a delivery: with every sink
+// full, nobody was sent to collect it and it evaporated where it lay - the decay stream T3
+// measures. A pile is now work in its own right, so an idle creep is dispatched to it whether or
+// not anything needs feeding. Tombstones and ruins count too: their contents disappear entirely
+// when the container decays, which is the death loss the same ledger books.
+//
+// One task per pile, and the id names it - two creeps sent to the same 50-energy heap means one
+// wasted trip. Piles too small to be worth the walk are left alone; they decay to nothing on
+// their own, and the trip costs more than the energy.
+const MIN_PILE_TO_COLLECT = 25;
+
+function addPickupTasks(room, tasks) {
+	const piles = [];
+	for (const pile of room.find(FIND_DROPPED_RESOURCES, { filter: resource => resource.resourceType === RESOURCE_ENERGY })) {
+		if (pile.amount >= MIN_PILE_TO_COLLECT) piles.push(pile);
+	}
+	// A grave's whole store is lost when it decays, so any amount is worth the walk.
+	for (const grave of room.find(FIND_TOMBSTONES, { filter: tomb => tomb.store[RESOURCE_ENERGY] > 0 })) piles.push(grave);
+	for (const ruin of room.find(FIND_RUINS, { filter: wreck => wreck.store[RESOURCE_ENERGY] > 0 })) piles.push(ruin);
+
+	for (const pile of piles) {
+		tasks.push({
+			id: `${TASK_TYPES.PICKUP}:${pile.id}`,
+			type: TASK_TYPES.PICKUP,
+			priority: taskOrder.basePriority(TASK_TYPES.PICKUP),
+			targetId: pile.id,
+		});
+	}
 }
 
 // Stationary mining: one dedicated miner sits on a source and harvests forever (a MINE
@@ -350,7 +381,12 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.REMOTE_HARVEST) {
 		return creep.memory.role === 'remoteHarvester' && partTypes.includes(WORK);
 	}
-	if (taskType === TASK_TYPES.REFILL_SPAWN || taskType === TASK_TYPES.REFILL_TOWER || taskType === TASK_TYPES.HAUL) {
+	if (
+		taskType === TASK_TYPES.REFILL_SPAWN ||
+		taskType === TASK_TYPES.REFILL_TOWER ||
+		taskType === TASK_TYPES.HAUL ||
+		taskType === TASK_TYPES.PICKUP
+	) {
 		return partTypes.includes(CARRY);
 	}
 	if (taskType === TASK_TYPES.SCOUT) {
@@ -380,6 +416,7 @@ function hasCapabilityForTask(creep, taskType) {
 
 function isCreepReadyForTask(creep, taskType) {
 	const gatheringTask =
+		taskType === TASK_TYPES.PICKUP ||
 		taskType === TASK_TYPES.DEFENSE ||
 		taskType === TASK_TYPES.REMOTE_HARVEST ||
 		taskType === TASK_TYPES.REMOTE_DEFENSE ||
@@ -414,7 +451,9 @@ function isCreepReadyForTask(creep, taskType) {
 const ROLE_DUTIES = {
 	miner: [TASK_TYPES.MINE],
 	breacher: [TASK_TYPES.DISMANTLE],
-	hauler: [TASK_TYPES.HAUL],
+	// Collecting is the hauler's job in both directions - taking a load somewhere, and picking a
+	// load up off the floor before it evaporates.
+	hauler: [TASK_TYPES.HAUL, TASK_TYPES.PICKUP],
 	upgrader: [TASK_TYPES.UPGRADE],
 	builder: [TASK_TYPES.BUILD, TASK_TYPES.REPAIR],
 	scout: [TASK_TYPES.SCOUT],

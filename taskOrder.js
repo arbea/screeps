@@ -13,6 +13,11 @@ const TASK_ORDER = [
 	TASK_TYPES.REFILL_TOWER,
 	TASK_TYPES.MINE,
 	TASK_TYPES.HAUL,
+	// Above remote work and building, below delivery: what is on the ground is evaporating at
+	// 1/1000 per tick and what is in a tombstone vanishes with it, so collecting beats every job
+	// that will still be there in a hundred ticks - but a spawn that cannot afford a creep is
+	// still the more expensive loss.
+	TASK_TYPES.PICKUP,
 	TASK_TYPES.RESERVE_CONTROLLER,
 	TASK_TYPES.REMOTE_HARVEST,
 	TASK_TYPES.BUILD,
