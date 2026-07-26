@@ -2,6 +2,7 @@ const config = require('./config');
 const mining = require('./mining');
 const creepBodies = require('./creepBodies');
 const buildOrder = require('./buildOrder');
+const logistics = require('./logistics');
 
 function countCreepsAssignedTo(targetId, taskType) {
 	return _.filter(
@@ -44,32 +45,36 @@ function publishStrategySnapshot(room) {
 	const isSnapshotTick = Game.time % config.SNAPSHOT_INTERVAL === 0;
 	if (!isSnapshotTick) return;
 
+	// Haulers are no longer counted per source - they belong to none - so this reports only what
+	// is still a per-source quantity: who is mining it and who is self-serving from it.
 	const sources = room.find(FIND_SOURCES_ACTIVE);
-	const perSource = sources.map(source => {
-		const accessibleTiles = mining.getAccessibleTiles(room, source.pos).length;
-		const minerCapacity = mining.maxMinersForSource(room, source);
-		const haulCapacity = mining.haulSlotsForSource(room, source);
+	const perSource = sources.map(source => ({
+		sourceId: source.id,
+		pos: { x: source.pos.x, y: source.pos.y },
+		accessibleTiles: mining.getAccessibleTiles(room, source.pos).length,
+		minerCapacity: mining.maxMinersForSource(room, source),
+		currentMiners: countCreepsAssignedTo(source.id, 'MINE'),
+		fallbackCapacity: mining.fallbackHarvestSlotsForSource(room, source),
+		currentFallbackHarvesters: countCreepsAssignedTo(source.id, 'HARVEST'),
+	}));
 
-		return {
-			sourceId: source.id,
-			pos: { x: source.pos.x, y: source.pos.y },
-			accessibleTiles,
-			minerCapacity,
-			currentMiners: countCreepsAssignedTo(source.id, 'MINE'),
-			haulCapacity,
-			currentHaulers: countCreepsAssignedTo(source.id, 'HAUL'),
-			fallbackCapacity: mining.fallbackHarvestSlotsForSource(room, source),
-			currentFallbackHarvesters: countCreepsAssignedTo(source.id, 'HARVEST'),
-		};
-	});
+	const requests = logistics.collectRequests(room);
+	const supplies = logistics.collectSupplies(room);
 
 	if (!Memory.strategySnapshot) Memory.strategySnapshot = {};
 	Memory.strategySnapshot[room.name] = {
 		tick: Game.time,
 		perSource,
+		// The ledger's own state, which is what now decides how many hands the room wants.
+		logistics: {
+			openRequests: requests.length,
+			energyDemanded: requests.reduce((sum, request) => sum + request.need, 0),
+			supplyPoints: supplies.length,
+			energyAvailableToCollect: supplies.reduce((sum, supply) => sum + supply.amount, 0),
+			unclaimedRequests: logistics.unclaimedRequestCount(room),
+		},
 		generalist: {
 			currentCount: countGeneralists(room),
-			haulCapacity: perSource.reduce((sum, s) => sum + s.haulCapacity, 0),
 			fallbackCapacity: perSource.reduce((sum, s) => sum + s.fallbackCapacity, 0),
 			activeHaulers: countActiveHaulers(room),
 			idleBroke: countIdleBrokeGeneralists(room),

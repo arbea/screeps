@@ -4,6 +4,7 @@ const { logAssign, logDefense, describeTask } = require('./log');
 const expansion = require('./expansion');
 const mining = require('./mining');
 const buildOrder = require('./buildOrder');
+const logistics = require('./logistics');
 const taskOrder = require('./taskOrder');
 const hostiles = require('./hostiles');
 
@@ -12,7 +13,10 @@ function buildTaskQueue(room) {
 
 	ensureExtensionSites(room);
 	addDefenseTasks(room, tasks);
-	addRefillTasks(room, tasks);
+	// Deliveries are the ledger's business now, spawn and tower refills included - a separate
+	// refill task aimed at the same structures would double-deliver, since in-transit energy is
+	// only deducted for haul tasks.
+	logistics.addHaulTasks(room, tasks);
 	addMiningTasks(room, tasks);
 	addBuildTasks(room, tasks);
 	addRepairTasks(room, tasks);
@@ -35,36 +39,6 @@ function addDefenseTasks(room, tasks) {
 		priority: taskOrder.basePriority(TASK_TYPES.DEFENSE),
 		targetId: target.id,
 	});
-}
-
-function addRefillTasks(room, tasks) {
-	const spawnsAndExtensions = room.find(FIND_MY_STRUCTURES, {
-		filter: structure =>
-			(structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION) &&
-			structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-	});
-	const priority = taskOrder.refillPriority(room);
-	for (const structure of spawnsAndExtensions) {
-		tasks.push({
-			id: `${TASK_TYPES.REFILL_SPAWN}:${structure.id}`,
-			type: TASK_TYPES.REFILL_SPAWN,
-			priority,
-			targetId: structure.id,
-		});
-	}
-
-	const towers = room.find(FIND_MY_STRUCTURES, {
-		filter: structure =>
-			structure.structureType === STRUCTURE_TOWER && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-	});
-	for (const tower of towers) {
-		tasks.push({
-			id: `${TASK_TYPES.REFILL_TOWER}:${tower.id}`,
-			type: TASK_TYPES.REFILL_TOWER,
-			priority: taskOrder.basePriority(TASK_TYPES.REFILL_TOWER),
-			targetId: tower.id,
-		});
-	}
 }
 
 // Stationary mining: one dedicated miner sits on a source and harvests forever (a MINE
@@ -104,21 +78,6 @@ function addMiningTasks(room, tasks) {
 			});
 		}
 
-		// A single hauler slot starves the moment a source has more than one miner (or a fast
-		// miner) feeding it faster than one hauler can clear - open more slots when there's
-		// more energy sitting at the source than one hauler trip can carry, capped by the same
-		// tile-count ceiling as mining.
-		const haulSlots = mining.haulSlotsForSource(room, source);
-		const currentHaulers = countCreepsAssignedTo(source.id, TASK_TYPES.HAUL);
-		const openHaulSlots = Math.max(0, haulSlots - currentHaulers);
-		for (let slot = 0; slot < openHaulSlots; slot++) {
-			tasks.push({
-				id: `${TASK_TYPES.HAUL}:${source.id}:${currentHaulers + slot}`,
-				type: TASK_TYPES.HAUL,
-				priority: taskOrder.basePriority(TASK_TYPES.HAUL),
-				targetId: source.id,
-			});
-		}
 
 		// An idle, empty-handed generalist that can't get a HAUL slot (e.g. the other source
 		// is temporarily depleted, or every slot is already taken) has no way to earn energy

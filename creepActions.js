@@ -2,6 +2,7 @@ const TASK_TYPES = require('./taskTypes');
 const { logDone } = require('./log');
 const { checkAndHandleStall } = require('./stallDetection');
 const hostiles = require('./hostiles');
+const logistics = require('./logistics');
 
 function runDefense(creep, hostile) {
 	const inRange = creep.pos.inRangeTo(hostile, 1);
@@ -191,36 +192,58 @@ function deliverEnergyToStructures(creep) {
 	return true;
 }
 
-function runHaul(creep, source) {
-	const full = creep.store.getFreeCapacity() === 0;
-	if (full) return deliverEnergyToStructures(creep);
-
-	const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
-		filter: structure => structure.structureType === STRUCTURE_CONTAINER,
-	})[0];
-	if (container && container.store[RESOURCE_ENERGY] > 0) {
-		const inRange = creep.pos.isNearTo(container);
-		if (!inRange) {
-			creep.moveTo(container);
-			return false;
-		}
-		creep.withdraw(container, RESOURCE_ENERGY);
+function collectFrom(creep, supply) {
+	const inRange = creep.pos.isNearTo(supply.pos);
+	if (!inRange) {
+		creep.moveTo(supply.pos.x, supply.pos.y);
 		return false;
 	}
 
-	const dropped = source.pos.findInRange(FIND_DROPPED_RESOURCES, 2)[0];
-	if (dropped) {
-		const inRange = creep.pos.isNearTo(dropped);
-		if (!inRange) {
-			creep.moveTo(dropped);
-			return false;
-		}
-		creep.pickup(dropped);
-		return false;
-	}
+	// A loose pile is picked up; a container or storage is withdrawn from. Resolving the object
+	// only once we are adjacent keeps this to one lookup per arrival rather than per tick of travel.
+	const target = Game.getObjectById(supply.id);
+	if (!target) return false;
 
-	creep.moveTo(source);
+	if (target.amount !== undefined) creep.pickup(target);
+	else creep.withdraw(target, RESOURCE_ENERGY);
 	return false;
+}
+
+// The hauler belongs to no source. Its task names only where the energy is going; where it comes
+// from is chosen fresh each trip from whatever the ledger scores highest, so an emptied source
+// simply stops being picked and its haulers move to another without anyone reassigning them.
+function runHaul(creep, sink, task) {
+	const room = creep.room;
+	const roomHasCapacity = creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
+
+	if (roomHasCapacity) {
+		const supply = logistics.bestSupplyFor(creep);
+		if (supply) {
+			// Remembered so other haulers deduct this creep's share of that pile while it is on its
+			// way, which is what stops two of them being sent to the same load.
+			task.pickupFrom = supply.id;
+			return collectFrom(creep, supply);
+		}
+		// Nothing left to collect - release the claim so it stops being deducted from a pile this
+		// creep is no longer going to.
+		delete task.pickupFrom;
+	}
+
+	const carrying = creep.store[RESOURCE_ENERGY] > 0;
+	// Nothing to carry and nothing to collect: the delivery cannot be made, so release the task
+	// rather than stand on it and keep the sink claimed against everyone else.
+	if (!carrying) return true;
+
+	const sinkFull = sink.store && sink.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
+	if (sinkFull) return true;
+
+	const inRange = creep.pos.isNearTo(sink);
+	if (!inRange) {
+		creep.moveTo(sink);
+		return false;
+	}
+	creep.transfer(sink, RESOURCE_ENERGY);
+	return true;
 }
 
 // Never reports done: recycleCreep destroys the creep on success, so there is no creep left to

@@ -92,51 +92,11 @@ function fallbackHarvestSlotsForSource(room, source) {
 
 const HAULER_CAPACITY_ESTIMATE = 50; // conservative baseline; matches the default generalist body
 
-// Only owned structures are scanned, so this stays cheap even in a room ringed by neutral walls.
-function energySinkFreeCapacity(room) {
-	return room
-		.find(FIND_MY_STRUCTURES, {
-			filter: structure =>
-				structure.structureType === STRUCTURE_SPAWN ||
-				structure.structureType === STRUCTURE_EXTENSION ||
-				structure.structureType === STRUCTURE_TOWER ||
-				structure.structureType === STRUCTURE_STORAGE,
-		})
-		.reduce((sum, structure) => sum + structure.store.getFreeCapacity(RESOURCE_ENERGY), 0);
-}
-
-// How many haulers a source can usefully occupy: enough to clear whatever's currently piled
-// up in its container/on the ground within one round trip each, capped by physical tile
-// space - same "derive it from the map, don't guess a number" logic as maxMinersForSource.
-//
-// Also capped by how much the room's stores can still accept, which is the half that was
-// missing: hauling energy nobody can receive parks a creep on a full load, and because HAUL
-// outranks BUILD it immediately claims another haul slot instead of spending what it carries.
-// With the stores full the useful number of slots is zero - that releases those creeps to
-// BUILD/UPGRADE, which is exactly where the energy they are holding needs to go. So there is no
-// floor of 1 here: "no room to put it" is a real answer, not a value to round up.
-function haulSlotsForSource(room, source) {
-	const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
-		filter: structure => structure.structureType === STRUCTURE_CONTAINER,
-	})[0];
-	const stored = container ? container.store[RESOURCE_ENERGY] : 0;
-	const dropped = source.pos
-		.findInRange(FIND_DROPPED_RESOURCES, 2)
-		.reduce((sum, resource) => sum + resource.amount, 0);
-
-	const neededByVolume = Math.ceil((stored + dropped) / HAULER_CAPACITY_ESTIMATE);
-	const acceptedByStores = Math.ceil(energySinkFreeCapacity(room) / HAULER_CAPACITY_ESTIMATE);
-	const accessibleTileCount = getAccessibleTiles(room, source.pos).length;
-
-	return Math.max(0, Math.min(neededByVolume, acceptedByStores, accessibleTileCount));
-}
-
 module.exports = {
 	minerWorkCount,
 	getAccessibleTiles,
 	getMiningTiles,
 	maxMinersForSource,
-	haulSlotsForSource,
 	fallbackHarvestSlotsForSource,
 	SATURATION_WORK,
 };
