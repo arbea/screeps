@@ -33,3 +33,5 @@ changes are recorded only here.
 - Watch the throttle tier from outside the session, since a stopped session cannot restart itself.
 - Show the last message an ally actually sent, and how many ticks ago it arrived.
 - Add a fourth page for reconciling with the ally, with a box that queues into the protocol outbox.
+- Target an 85-95% usage band: never throttle below the floor, ration inside it, stand down above it.
+- Write HANDBOOK.md - the operating rules a fresh session needs, kept current as behaviour changes.
