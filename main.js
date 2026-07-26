@@ -54,6 +54,12 @@ function runIntel() {
 	expansion.updateRoomIntel();
 }
 
+// Per-room sequence from the spec: defence → population → remote → war manpower → link →
+// build/lab/market → spawn. The first three are all task emission, which the task queue does in a
+// single pass; war manpower, link and lab/market have nothing built yet. Spawning stays last
+// deliberately - it decides what to produce from the backlog the phases before it just left
+// behind, so running it earlier would have it deciding on stale demand.
+//
 // Task building, spawning and creep actions are what keep a room alive; the snapshots and the
 // road surveyor only describe it. In crisis the descriptive half is dropped so the room keeps
 // defending and producing on whatever CPU is left.
@@ -62,13 +68,15 @@ function runColonies(mode) {
 
 	for (const room of ownedRooms()) {
 		taskQueue.runTaskQueue(room);
-		spawnQueue.runSpawnQueue(room, Memory.taskBacklog);
-		if (essentialOnly) continue;
 
-		traffic.runTraffic(room);
-		mapSnapshot.publishMapSnapshot(room);
-		economyStats.publishEconomyStats(room);
-		strategySnapshot.publishStrategySnapshot(room);
+		if (!essentialOnly) {
+			traffic.runTraffic(room, mode);
+			mapSnapshot.publishMapSnapshot(room);
+			economyStats.publishEconomyStats(room);
+			strategySnapshot.publishStrategySnapshot(room);
+		}
+
+		spawnQueue.runSpawnQueue(room, Memory.taskBacklog);
 	}
 }
 

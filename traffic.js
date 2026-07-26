@@ -1,5 +1,6 @@
 const config = require('./config');
 const buildOrder = require('./buildOrder');
+const kernel = require('./kernel');
 
 // Every tick, count which room tiles our creeps are standing on - a cheap O(creep count)
 // scan (no room.find of static structures) that builds a picture of the paths actually being
@@ -93,10 +94,18 @@ function placeRoadsOnHighTraffic(room) {
 	}
 }
 
-function runTraffic(room) {
+function runTraffic(room, mode) {
 	if (!config.AUTO_BUILD_ROADS) return;
 
+	// Counting tiles is a walk over the room's own creeps and has to happen every tick or the
+	// traffic picture develops gaps, so it runs in any mode. Laying road is the heavy half - it
+	// looks up structures and sites per candidate tile - and the spec reserves that for burst,
+	// where there is bucket to spare. Skipping it costs nothing: the counts keep accumulating and
+	// the same tiles are still there to pave once the bucket recovers.
 	recordTraffic(room);
+
+	const canAffordSurvey = mode === kernel.MODES.BURST;
+	if (!canAffordSurvey) return;
 
 	const isScanTick = Game.time % config.REPAIR_SCAN_INTERVAL === 0;
 	if (isScanTick) pruneExcessRoadSites(room);

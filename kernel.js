@@ -16,8 +16,28 @@ const FUSE = 0.85;
 
 const MODES = { BURST: 'burst', NORMAL: 'normal', LEAN: 'lean', CRISIS: 'crisis' };
 
+// The bucket holds 500 before CPU is unlocked and 10000 after, and every threshold above is a
+// fraction of that ceiling - assume the wrong one and a full 500 bucket reads as 5%, pinning the
+// bot in crisis forever.
+//
+// Which ceiling applies is inferred from the highest bucket ever observed rather than read from
+// an API flag, because that is true regardless of how the account came by its CPU. It has to be
+// the historic maximum, not the current level: a drained 10000 bucket looks exactly like a full
+// 500 one, and reading that as "60% full, all good" would suppress crisis mode at the moment it
+// is most needed.
+const BUCKET_CAPS = [500, 10000];
+
+function bucketCap() {
+	if (!Memory.kernel) Memory.kernel = {};
+
+	const seen = Math.max(Memory.kernel.maxBucketSeen || 0, Game.cpu.bucket);
+	Memory.kernel.maxBucketSeen = seen;
+
+	return BUCKET_CAPS.find(cap => seen <= cap) || BUCKET_CAPS[BUCKET_CAPS.length - 1];
+}
+
 function currentMode() {
-	const filled = Game.cpu.bucket / 10000;
+	const filled = Game.cpu.bucket / bucketCap();
 
 	if (filled < CRISIS_BUCKET) return MODES.CRISIS;
 	if (filled < LEAN_BUCKET) return MODES.LEAN;
