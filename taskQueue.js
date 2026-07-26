@@ -34,17 +34,34 @@ function addDefenseTasks(room, tasks) {
 	});
 }
 
+// Energy sitting in spawn and extensions is the room's whole spawning budget: the body it can
+// build is decided by energyAvailable at that instant, not by the capacity it theoretically has.
+// Empty extensions are therefore the same kind of hard block as an expiring downgrade timer -
+// they cap every creep the room can produce - so the configured priority acts as the baseline for
+// full stores and rises as they drain, reaching defense-level urgency when they are empty. How
+// the room values refilling against building stays a strategy choice; how badly it currently
+// needs it is read from the stores. Both numbers are plain Room properties, so this costs nothing.
+function refillPriority(room) {
+	const capacity = room.energyCapacityAvailable;
+	if (!capacity) return config.PRIORITY.REFILL_SPAWN;
+
+	const filled = Math.max(0, Math.min(1, room.energyAvailable / capacity));
+	const spread = config.PRIORITY.DEFENSE - config.PRIORITY.REFILL_SPAWN;
+	return Math.round(config.PRIORITY.REFILL_SPAWN + spread * (1 - filled));
+}
+
 function addRefillTasks(room, tasks) {
 	const spawnsAndExtensions = room.find(FIND_MY_STRUCTURES, {
 		filter: structure =>
 			(structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION) &&
 			structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
 	});
+	const priority = refillPriority(room);
 	for (const structure of spawnsAndExtensions) {
 		tasks.push({
 			id: `${TASK_TYPES.REFILL_SPAWN}:${structure.id}`,
 			type: TASK_TYPES.REFILL_SPAWN,
-			priority: config.PRIORITY.REFILL_SPAWN,
+			priority,
 			targetId: structure.id,
 		});
 	}
