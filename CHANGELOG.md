@@ -35,3 +35,6 @@ changes are recorded only here.
 - Add a fourth page for reconciling with the ally, with a box that queues into the protocol outbox.
 - Target an 85-95% usage band: never throttle below the floor, ration inside it, stand down above it.
 - Write HANDBOOK.md - the operating rules a fresh session needs, kept current as behaviour changes.
+- Serve the handbook from the dashboard, read fresh per request.
+- Fix a ReferenceError that had stopped the room spawning entirely since the upgrader change.
+- Add tools/check-references.js, which finds the undefined-name bugs node -c cannot see.
