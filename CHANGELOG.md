@@ -38,3 +38,4 @@ changes are recorded only here.
 - Serve the handbook from the dashboard, read fresh per request.
 - Fix a ReferenceError that had stopped the room spawning entirely since the upgrader change.
 - Add tools/check-references.js, which finds the undefined-name bugs node -c cannot see.
+- Let the reported usage percentage anchor the estimate, since the official page needs a login.
