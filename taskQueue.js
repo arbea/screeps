@@ -315,6 +315,10 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.DEFENSE || taskType === TASK_TYPES.REMOTE_DEFENSE) {
 		return partTypes.includes(ATTACK) || partTypes.includes(RANGED_ATTACK);
 	}
+	// Dismantling is WORK alone - no CARRY involved, the wall doesn't care what the creep holds.
+	if (taskType === TASK_TYPES.DISMANTLE) {
+		return partTypes.includes(WORK);
+	}
 	// Restricted to the 'remoteHarvester' role: that's the only body built with CARRY parts
 	// (creepBodies.buildRemoteHarvesterBody) and homeRoom memory (expansion.js). A 'miner' also has
 	// WORK parts but zero CARRY capacity and no homeRoom, so if it slipped in here
@@ -358,6 +362,7 @@ function isCreepReadyForTask(creep, taskType) {
 		taskType === TASK_TYPES.REMOTE_DEFENSE ||
 		taskType === TASK_TYPES.SCOUT ||
 		taskType === TASK_TYPES.RESERVE_CONTROLLER ||
+		taskType === TASK_TYPES.DISMANTLE ||
 		taskType === TASK_TYPES.MINE;
 	if (gatheringTask) return true;
 
@@ -385,6 +390,7 @@ function isCreepReadyForTask(creep, taskType) {
 // fall through to the capability check and may take anything they can physically do.
 const ROLE_DUTIES = {
 	miner: [TASK_TYPES.MINE],
+	breacher: [TASK_TYPES.DISMANTLE],
 	hauler: [TASK_TYPES.HAUL],
 	upgrader: [TASK_TYPES.UPGRADE],
 	builder: [TASK_TYPES.BUILD, TASK_TYPES.REPAIR],

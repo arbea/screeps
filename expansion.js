@@ -56,7 +56,11 @@ function updateRoomIntel() {
 			const neighbour = Game.rooms[name];
 			return neighbour && neighbour.controller && neighbour.controller.my;
 		});
-		if (bordersOurs) updateSourceReachability(room);
+		if (bordersOurs) {
+			maintainBreach(room);
+			updateSourceReachability(room);
+			planBreach(room);
+		}
 	}
 }
 
@@ -128,6 +132,69 @@ function updateSourceReachability(room) {
 	if (unreachable.length > 0) log(`[外礦] ${room.name} 有 ${unreachable.length} 個礦源從我方入口無路可達,不列為運轉礦`);
 	intel.unreachableSources = unreachable;
 	intel.reachabilityAt = Game.time;
+}
+
+// When every route to a source dies at a wall, the cheapest way through is itself a pathfinding
+// question: let PathFinder walk THROUGH relic walls at a price scaled to their hit points, and
+// the walls on the route it picks are the breach set. On E47S28 one 881k-hit wall on the south
+// rim beat every alternative by millions of hits. Needs vision, which a scout provides.
+function planBreach(room) {
+	const intel = Memory.rooms[room.name];
+	if (!intel || (intel.unreachableSources || []).length === 0) return;
+	if (intel.breach && intel.breach.targets.length > 0) return;
+
+	const entries = entryTilesFromHome(room);
+	if (entries.length === 0) return;
+
+	const walls = room.find(FIND_STRUCTURES, { filter: structure => structure.structureType === STRUCTURE_WALL });
+	const costs = structuresBlockedCosts(room);
+	// Re-priced from impassable to expensive: the cost tracks dismantle work, clamped into the
+	// matrix's range, so the search minimises hits first and walking distance a far second.
+	for (const wall of walls) {
+		costs.set(wall.pos.x, wall.pos.y, Math.min(254, 50 + Math.floor(wall.hits / 100000)));
+	}
+
+	const targets = [];
+	for (const sourceId of intel.unreachableSources) {
+		const source = Game.getObjectById(sourceId);
+		if (!source) continue;
+
+		const result = PathFinder.search(source.pos, entries.map(pos => ({ pos, range: 0 })), {
+			maxRooms: 1,
+			maxOps: 20000,
+			plainCost: 2,
+			swampCost: 10,
+			roomCallback: () => costs,
+		});
+		if (result.incomplete) continue;
+
+		for (const step of result.path) {
+			const wall = walls.find(candidate => candidate.pos.x === step.x && candidate.pos.y === step.y);
+			const alreadyListed = wall && targets.some(target => target.id === wall.id);
+			if (wall && !alreadyListed) targets.push({ id: wall.id, x: wall.pos.x, y: wall.pos.y, hits: wall.hits });
+		}
+	}
+	if (targets.length === 0) return;
+
+	intel.breach = { targets, plannedAt: Game.time };
+	// Not a nested template literal - tools/check-references.js strips strings with a regex that
+	// can't see past the inner backtick pair, and a checker nobody can run protects nobody.
+	const described = targets.map(target => '(' + target.x + ',' + target.y + ') ' + target.hits).join('、');
+	log(`[拆牆] ${room.name} 突破口:${described}`);
+}
+
+// A fallen breach wall means the map changed, so every route verdict is stale - clearing the
+// timestamp is what lets mining resume by itself once the way is open.
+function maintainBreach(room) {
+	const intel = Memory.rooms[room.name];
+	if (!intel || !intel.breach) return;
+
+	const remaining = intel.breach.targets.filter(target => Game.getObjectById(target.id));
+	if (remaining.length === intel.breach.targets.length) return;
+
+	delete intel.reachabilityAt;
+	if (remaining.length === 0) delete intel.breach;
+	else intel.breach.targets = remaining;
 }
 
 function scoreRoom(roomName) {
@@ -284,7 +351,45 @@ function runExpansion(homeRoom) {
 	const tasks = [];
 	addScoutTasks(homeRoom, tasks);
 	addRemoteTasks(homeRoom, myUsername, tasks);
+	addBreachTasks(homeRoom, tasks);
 	return tasks;
+}
+
+// The breach pipeline: a bordering room whose sources are all walled off needs eyes first (the
+// plan needs vision), then its walls taken down one at a time. Not while somebody owns or
+// garrisons the room - that would be siege work, and a different decision entirely.
+function addBreachTasks(homeRoom, tasks) {
+	for (const roomName of getAdjacentRoomNames(homeRoom.name)) {
+		const intel = Memory.rooms[roomName];
+		if (!intel) continue;
+		if ((intel.unreachableSources || []).length === 0) continue;
+		if (intel.owner || intel.hostileCount > 0) continue;
+
+		if (!intel.breach) {
+			// No plan yet - vision is the missing ingredient, and an idle MOVE creep standing in
+			// the room is what turns its walls into a plan.
+			const haveVision = Boolean(Game.rooms[roomName]);
+			if (!haveVision) {
+				tasks.push({
+					id: `${TASK_TYPES.SCOUT}:${roomName}`,
+					type: TASK_TYPES.SCOUT,
+					priority: taskOrder.basePriority(TASK_TYPES.SCOUT),
+					targetRoomName: roomName,
+				});
+			}
+			continue;
+		}
+
+		// One wall at a time, in the plan's own order - the first is the one the route needs.
+		const target = intel.breach.targets[0];
+		tasks.push({
+			id: `${TASK_TYPES.DISMANTLE}:${target.id}`,
+			type: TASK_TYPES.DISMANTLE,
+			priority: taskOrder.basePriority(TASK_TYPES.DISMANTLE),
+			targetId: target.id,
+			targetRoomName: roomName,
+		});
+	}
 }
 
 function countCreepsWithRole(role) {
@@ -301,10 +406,32 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 
 	// One scout per unscouted room is the natural ceiling here - spawning more than that would
 	// just leave extras with nowhere new to explore, so the count comes from the map, not a knob.
+	// Rooms waiting on a breach plan count too: the plan needs vision, vision needs a body in the
+	// room, and a room already surveyed once would otherwise never earn a second look.
+	const breachVisionRooms = getAdjacentRoomNames(homeRoom.name).filter(roomName => {
+		const intel = Memory.rooms[roomName];
+		return intel && (intel.unreachableSources || []).length > 0 && !intel.breach &&
+			!intel.owner && !(intel.hostileCount > 0) && !Game.rooms[roomName];
+	}).length;
 	const unscoutedCount = getUnscoutedAdjacent(homeRoom.name).length;
-	const needsScout = countCreepsWithRole('scout') < unscoutedCount;
+	const needsScout = countCreepsWithRole('scout') < unscoutedCount + breachVisionRooms;
 	if (needsScout) {
 		requests.push({ role: 'scout', priority: spawnOrder.spawnPriority('scout'), body: creepBodies.bodyFor('scout', homeRoom.energyCapacityAvailable), memory: { role: 'scout' } });
+	}
+
+	// One breacher while any bordering room has a breach planned. Builders stay on their sites;
+	// the wall wants a body that is all WORK and legs.
+	const breachPlanned = getAdjacentRoomNames(homeRoom.name).some(roomName => {
+		const intel = Memory.rooms[roomName];
+		return intel && intel.breach && intel.breach.targets.length > 0 && !intel.owner && !(intel.hostileCount > 0);
+	});
+	if (breachPlanned && countCreepsWithRole('breacher') === 0) {
+		requests.push({
+			role: 'breacher',
+			priority: spawnOrder.spawnPriority('breacher'),
+			body: creepBodies.bodyFor('breacher', homeRoom.energyCapacityAvailable),
+			memory: { role: 'breacher', homeRoom: homeRoom.name },
+		});
 	}
 
 	for (const roomName of Memory.remoteRooms || []) {

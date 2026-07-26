@@ -18,6 +18,7 @@ const SPAWN_ORDER = [
 	'medic',
 	'drainer',
 	'scout',
+	'breacher',
 	'reserver',
 	'remoteHarvester',
 	'remoteDefender',

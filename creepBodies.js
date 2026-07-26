@@ -40,6 +40,9 @@ const RECIPES = {
 	remoteHarvester: { repeat: [WORK, WORK, CARRY, MOVE, MOVE] },
 	remoteDefender: { repeat: [ATTACK, MOVE] },
 	scout: { base: [MOVE] },
+	// All WORK and legs: dismantling needs no CARRY (the trickle of energy it returns is spent
+	// where it stands), and every CARRY forgone is another 50 hits per tick against the wall.
+	breacher: { repeat: [WORK, MOVE] },
 	reserver: { base: [CLAIM, MOVE] },
 };
 

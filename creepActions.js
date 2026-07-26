@@ -151,6 +151,18 @@ function runRemoteHarvest(creep, source, task) {
 	return false;
 }
 
+// No energy involved in either direction that matters: dismantling needs none, and the trickle
+// it returns stays in the store until it overflows, which is fine - the wall is the point.
+function runDismantle(creep, wall) {
+	const inRange = creep.pos.isNearTo(wall);
+	if (!inRange) {
+		creep.moveTo(wall);
+		return false;
+	}
+	creep.dismantle(wall);
+	return false;
+}
+
 function runMine(creep, source, task) {
 	// Tasks issued before miners were given squares have none to hold. Ending one hands the miner
 	// back to the queue, which reissues it with a square on the next tick, so no migration step is
@@ -290,6 +302,7 @@ const ACTIONS = {
 	[TASK_TYPES.REPAIR]: runRepair,
 	[TASK_TYPES.UPGRADE]: runUpgrade,
 	[TASK_TYPES.SCOUT]: runScout,
+	[TASK_TYPES.DISMANTLE]: runDismantle,
 	[TASK_TYPES.RESERVE_CONTROLLER]: runReserveController,
 	[TASK_TYPES.REMOTE_HARVEST]: runRemoteHarvest,
 	[TASK_TYPES.REMOTE_DEFENSE]: runRemoteDefense,
