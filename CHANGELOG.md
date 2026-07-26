@@ -75,3 +75,4 @@ changes are recorded only here.
 - Judge source-regen loss on the user's marks - under 5% good, under 10% needs fixing, 10%+ failing - and on the rolling ten-cycle window, so a landed fix shows on the card instead of hiding under the lifetime average.
 - Reword the regen-loss card to the current standard: per-source rows show the true rolling-window count and colour by the same 5%/10% marks as the card's verdict, with the marks stated in the card's own explanation.
 - Poll no faster than the self-cap can afford (150s, 24/hour against a 30/hour cap), and report a local self-cap pause as a pause with a countdown - not as a Screeps API error, which it never was.
+- Decouple page views from API spending entirely: Screeps is polled on a fixed 155-second schedule whether anyone is watching or not, and every page request just re-renders the latest cache.
