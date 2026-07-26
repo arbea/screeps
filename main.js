@@ -7,6 +7,7 @@ const mapSnapshot = require('./mapSnapshot');
 const economyStats = require('./economyStats');
 const strategySnapshot = require('./strategySnapshot');
 const expansion = require('./expansion');
+const ally = require('./ally');
 const traffic = require('./traffic');
 
 function cleanDeadCreepMemory() {
@@ -91,6 +92,7 @@ function runCreeps() {
 // without disturbing anything registered here.
 kernel.register('memory', runMemory, { core: true });
 kernel.register('intel', runIntel, { flex: true });
+kernel.register('ally', ally.run, { flex: true });
 kernel.register('colonies', runColonies, { core: true });
 kernel.register('creeps', runCreeps, { core: true });
 

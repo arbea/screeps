@@ -22,6 +22,15 @@ function updateRoomIntel() {
 		if (owned) continue;
 
 		const sources = room.find(FIND_SOURCES);
+
+		// Towers and spawns are what decide whether a room can be taken, and tower energy decides
+		// it more precisely than tower count - an empty tower shoots at nothing. The alliance
+		// protocol feeds these straight into an ally's engagement maths, so they are recorded for
+		// every visible room rather than only our own expansion candidates.
+		const towers = room.find(FIND_HOSTILE_STRUCTURES, {
+			filter: structure => structure.structureType === STRUCTURE_TOWER,
+		});
+
 		Memory.rooms[roomName] = {
 			lastSeen: Game.time,
 			sourceIds: sources.map(source => source.id),
@@ -29,6 +38,9 @@ function updateRoomIntel() {
 			owner: room.controller && room.controller.owner ? room.controller.owner.username : null,
 			reservedBy: room.controller && room.controller.reservation ? room.controller.reservation.username : null,
 			hostileCount: hostiles.findHostileCreeps(room).length,
+			towers: towers.length,
+			towerEnergy: towers.reduce((sum, tower) => sum + (tower.store ? tower.store[RESOURCE_ENERGY] : 0), 0),
+			spawns: room.find(FIND_HOSTILE_SPAWNS).length,
 		};
 	}
 }
