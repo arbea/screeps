@@ -44,7 +44,7 @@ function addPopulationRequests(room, requests) {
 	const targets = [
 		{ role: 'miner', target: population.minerTarget(room) },
 		{ role: 'hauler', target: population.haulerTarget(room, haulerBody || []) },
-		{ role: 'upgrader', target: population.upgraderTarget(room) },
+		{ role: 'upgrader', target: population.upgraderTarget(room, creepBodies.bodyFor('upgrader', bodyBudget(room)) || []) },
 		{ role: 'builder', target: population.builderTarget(room) },
 	];
 

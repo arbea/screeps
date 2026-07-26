@@ -1,4 +1,5 @@
 const mining = require('./mining');
+const creepBodies = require('./creepBodies');
 
 // A source regenerates its full 3000 over 300 ticks, so it yields 10 energy per tick no matter how
 // it is worked. That rate, not the size of the pile, is what the haul fleet has to keep up with.
@@ -64,11 +65,52 @@ function builderTarget(room) {
 	return Math.ceil(remaining / BUILD_WORK_PER_BUILDER);
 }
 
-// While there is anything to build, upgrading takes a back seat and one upgrader keeps the
-// downgrade clock topped up. With nothing left to build, surplus energy has nowhere better to go.
-function upgraderTarget(room) {
-	const hasConstruction = room.find(FIND_MY_CONSTRUCTION_SITES).length > 0;
-	return hasConstruction ? 1 : 3;
+// One WORK part turns one energy per tick into controller progress, so a body's WORK count is what
+// it can absorb while it is standing there.
+const UPGRADE_PER_WORK_PER_TICK = 1;
+
+// Every point of energy a room mines has three possible destinations: a creep body, a construction
+// site, or the controller. Whatever the first two do not claim has to go to the controller, because
+// a source refills to full on its own schedule and whatever is still in it at that moment is
+// produced and lost. The room cannot bank what it does not spend.
+//
+// The rule this replaces was "one upgrader while any site is open, three otherwise". It keyed off
+// whether building was happening rather than whether energy was actually scarce - so with five
+// sites permanently open, the room sat on twelve thousand uncollected energy and wasted 26% of
+// everything its sources produced, while one upgrader moved the controller at 1.2 energy a tick.
+// The presence of work is not the same as the absence of surplus.
+function upgraderTarget(room, upgraderBody) {
+	const body = upgraderBody || [];
+	const workParts = body.filter(part => part === WORK).length;
+	const carry = carryCapacityOf(body);
+	if (!workParts || !carry) return 1;
+
+	// What the map hands this room per tick, which is not a choice anyone made.
+	const produced = room.find(FIND_SOURCES).length * SOURCE_OUTPUT_PER_TICK;
+
+	// Builders are the other claim on that energy and are already sized to the work outstanding, so
+	// their draw is subtracted rather than guessed at. Builder and upgrader share one recipe, so at
+	// a given energy capacity they are the same body - which is what makes this body a fair stand-in
+	// for theirs, and BUILD_POWER the only difference between the two rates.
+	const buildDraw = builderTarget(room) * workParts * BUILD_POWER;
+	const spare = Math.max(0, produced - Math.min(produced, buildDraw));
+
+	// An upgrader only upgrades while standing at the controller; the rest of its cycle is spent
+	// fetching. Same round-trip reasoning as the hauler count, so the two stay consistent.
+	const ticksSpentUpgrading = carry / (workParts * UPGRADE_PER_WORK_PER_TICK);
+	const trip = roundTripTicks(room, room.controller);
+	const throughput = (workParts * UPGRADE_PER_WORK_PER_TICK * ticksSpentUpgrading) / (ticksSpentUpgrading + trip);
+
+	// Capped by how many creeps can physically stand next to the controller, the same limit that
+	// bounds miners around a source and haulers at a sink. Without it the arithmetic asks for
+	// seventeen upgraders to absorb twenty energy a tick through bodies that carry a hundred and
+	// walk thirty-four ticks to get there - a number that is correct and unbuildable, and would
+	// swamp the room with creeps that queue for a square instead of upgrading.
+	const roomAtTheController = mining.getAccessibleTiles(room, room.controller.pos).length;
+
+	// Always at least one: a controller left alone long enough downgrades, which costs far more
+	// than the creep that would have prevented it.
+	return Math.max(1, Math.min(Math.ceil(spare / throughput), roomAtTheController));
 }
 
 function countRole(room, role) {
@@ -97,7 +139,10 @@ function migrateGeneralists(room) {
 	);
 	if (generalists.length === 0) return;
 
-	const targets = { builder: builderTarget(room), upgrader: upgraderTarget(room) };
+	const targets = {
+		builder: builderTarget(room),
+		upgrader: upgraderTarget(room, creepBodies.bodyFor('upgrader', room.energyCapacityAvailable) || []),
+	};
 
 	for (const creep of generalists) {
 		const neediest = Object.keys(targets).reduce((worst, role) =>

@@ -76,7 +76,7 @@ function publishStrategySnapshot(room) {
 			miner: population.minerTarget(room),
 			hauler: population.haulerTarget(room, creepBodies.bodyFor('hauler', room.energyCapacityAvailable) || []),
 			builder: population.builderTarget(room),
-			upgrader: population.upgraderTarget(room),
+			upgrader: population.upgraderTarget(room, creepBodies.bodyFor('upgrader', room.energyCapacityAvailable) || []),
 			emergency: population.isEmergency(room),
 		},
 		bodySizes: {
