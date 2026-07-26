@@ -11,6 +11,7 @@ const strategySnapshot = require('./strategySnapshot');
 const expansion = require('./expansion');
 const ally = require('./ally');
 const traffic = require('./traffic');
+const sourceLoss = require('./sourceLoss');
 
 function cleanDeadCreepMemory() {
 	for (const name in Memory.creeps) {
@@ -63,6 +64,11 @@ function runColonies(mode) {
 	for (const room of ownedRooms()) {
 		population.migrateGeneralists(room);
 		taskQueue.runTaskQueue(room);
+
+		// Every tick, and never shed along with the descriptive systems: regeneration lands on one
+		// specific tick, so a cycle skipped for CPU is one whose waste can never be recovered - the
+		// reading after the gap cannot say what was left behind during it.
+		sourceLoss.run(room);
 
 		if (!essentialOnly) {
 			traffic.runTraffic(room, mode);

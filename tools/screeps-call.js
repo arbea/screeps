@@ -4,8 +4,8 @@
 // the account down to a 13.8-hour lockout were made from a terminal, not from the dashboard. A
 // meter that cannot see the biggest consumer reports everything fine right up to the refusal.
 //
-//   node screeps-call.js GET /api/user/memory?shard=shard3
-//   node screeps-call.js POST /api/user/console '{"shard":"shard3","expression":"1+1"}'
+//   node tools/screeps-call.js GET /api/user/memory?shard=shard3
+//   node tools/screeps-call.js POST /api/user/console '{"shard":"shard3","expression":"1+1"}'
 
 const https = require('https');
 const http = require('http');
@@ -15,7 +15,7 @@ const path = require('path');
 const DASHBOARD = { host: 'localhost', port: 3131 };
 
 function readToken() {
-	const content = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+	const content = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8');
 	return content.match(/SCREEPS_TOKEN=(.+)/)[1].trim();
 }
 
@@ -43,7 +43,7 @@ function recordCall(endpoint, status) {
 async function main() {
 	const [method, apiPath, payload] = process.argv.slice(2);
 	if (!method || !apiPath) {
-		console.error('用法: node screeps-call.js <METHOD> <path> [json body]');
+		console.error('用法: node tools/screeps-call.js <METHOD> <path> [json body]');
 		process.exit(2);
 	}
 

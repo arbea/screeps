@@ -25,3 +25,5 @@ changes are recorded only here.
 - Count every Screeps API call against its published limit, since the responses carry no headers.
 - Route terminal-side Screeps calls through screeps-call.js so the meter can see them.
 - Measure AI usage from session transcripts and stand down at 85% until the window resets.
+- Book what each source still held when it regenerated - energy produced and never collected.
+- Move screeps-call.js under tools/ so the game's folder sync stops uploading it as a module.
