@@ -34,6 +34,9 @@ function trackIdle() {
 
 		stats.idle++;
 		if (creep.memory.idleSince === undefined) creep.memory.idleSince = Game.time;
+		// The lifetime account, alongside the current streak: the goal judges idle time as a share
+		// of each creep's whole life, and a share needs a numerator that survives busy spells.
+		creep.memory.idleTotal = (creep.memory.idleTotal || 0) + 1;
 	}
 }
 

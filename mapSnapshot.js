@@ -73,6 +73,11 @@ function publishMapSnapshot(room) {
 				targetPos: target ? toPoint(target) : null,
 				taskStartTick: creep.memory.taskStartTick || null,
 				idleTicks: creep.memory.idleSince === undefined ? 0 : Game.time - creep.memory.idleSince,
+				idleTotal: creep.memory.idleTotal || 0,
+				// A CLAIM body lives on the shorter clock, so its share is measured against that.
+				lived: creep.ticksToLive === undefined
+					? 0
+					: (creep.getActiveBodyparts(CLAIM) > 0 ? CREEP_CLAIM_LIFE_TIME : CREEP_LIFE_TIME) - creep.ticksToLive,
 				energy: creep.store[RESOURCE_ENERGY],
 				energyCapacity: creep.store.getCapacity(RESOURCE_ENERGY),
 				hits: creep.hits,
