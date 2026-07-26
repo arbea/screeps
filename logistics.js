@@ -100,6 +100,16 @@ function collectSupplies(room) {
 		if (stored > 0) supplies.push({ id: structure.id, pos: structure.pos, amount: stored });
 	}
 
+	// Ruins and tombstones are the only "demolition" the game allows: neither can be removed by
+	// hand, both decay on their own schedule - what can be done is carry their store home first.
+	// collectFrom already withdraws from anything with a store, so listing them is the whole job.
+	for (const ruin of room.find(FIND_RUINS, { filter: r => r.store[RESOURCE_ENERGY] > 0 })) {
+		supplies.push({ id: ruin.id, pos: ruin.pos, amount: ruin.store[RESOURCE_ENERGY] });
+	}
+	for (const tomb of room.find(FIND_TOMBSTONES, { filter: t => t.store[RESOURCE_ENERGY] > 0 })) {
+		supplies.push({ id: tomb.id, pos: tomb.pos, amount: tomb.store[RESOURCE_ENERGY] });
+	}
+
 	const storage = room.storage;
 	if (storage && isProductionShort(room) && storage.store[RESOURCE_ENERGY] > 0) {
 		supplies.push({ id: storage.id, pos: storage.pos, amount: storage.store[RESOURCE_ENERGY] });

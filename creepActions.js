@@ -127,9 +127,20 @@ function deliverEnergyHome(creep) {
 	return true;
 }
 
-function runRemoteHarvest(creep, source) {
+function runRemoteHarvest(creep, source, task) {
 	const full = creep.store.getFreeCapacity() === 0;
 	if (full) return deliverEnergyHome(creep);
+
+	// Outside the target room the waypoint is the room, not the source. The source object only
+	// resolves while something else keeps that room visible, so steering by it from a distance
+	// makes the destination flip between source and room-centre every time vision flickers -
+	// each flip threw the cached path away, and a harvester spent 600 ticks re-pathing in its
+	// own driveway. One fixed waypoint per leg; precision starts where vision is guaranteed.
+	const outbound = task && task.targetRoomName && creep.room.name !== task.targetRoomName;
+	if (outbound) {
+		creep.moveTo(new RoomPosition(25, 25, task.targetRoomName));
+		return false;
+	}
 
 	const inRange = creep.pos.isNearTo(source);
 	if (!inRange) {
@@ -290,9 +301,29 @@ const ACTIONS = {
 // present), so they run against the task itself rather than a resolved Game object.
 const ROOM_TARGETED_TASKS = new Set([TASK_TYPES.SCOUT, TASK_TYPES.REMOTE_DEFENSE]);
 
+// A relief miner has no task yet by design - its predecessor still holds the source. Walking to
+// the pit now is the whole point of having been spawned early; range 2 keeps it off the work
+// square and out of the incumbent's way until the MINE task frees up.
+function standByForRelief(creep) {
+	const sourceId = creep.memory.standbyFor;
+	if (!sourceId) return;
+
+	const source = Game.getObjectById(sourceId);
+	if (!source) return;
+
+	const atPost = creep.pos.inRangeTo(source, 2);
+	if (!atPost) creep.moveTo(source, { range: 2 });
+}
+
 function runCreep(creep) {
 	const task = creep.memory.task;
-	if (!task) return;
+	if (!task) {
+		standByForRelief(creep);
+		return;
+	}
+
+	// Whatever it was standing by for, it has real work now.
+	if (creep.memory.standbyFor !== undefined) delete creep.memory.standbyFor;
 
 	const wasStalled = checkAndHandleStall(creep);
 	if (wasStalled) return;

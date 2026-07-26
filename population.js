@@ -117,6 +117,46 @@ function countRole(room, role) {
 	return _.filter(Game.creeps, creep => creep.room.name === room.name && creep.memory.role === role).length;
 }
 
+// A replacement ordered only after its predecessor dies leaves the source idle for the whole
+// spawn-plus-walk. Ordered one lead time early, the shift changes at the pit instead: the relief
+// stands two tiles off while the incumbent works its last ticks. The lead comes from the actual
+// body - a 5-WORK miner drags itself at one step per five plains ticks, so the walk dominates -
+// plus a small margin for the spawn queue's own latency.
+const HANDOVER_MARGIN_TICKS = 10;
+
+function minerTicksPerStep(room) {
+	const body = creepBodies.bodyFor('miner', room.energyCapacityAvailable) || [];
+	const moveParts = body.filter(part => part === MOVE).length || 1;
+	const heavyParts = body.length - moveParts;
+	// Plains cost 2 fatigue per non-MOVE part; each MOVE clears 2 per tick.
+	return Math.max(1, Math.ceil(heavyParts / moveParts));
+}
+
+function minerLeadTicks(room, source) {
+	const body = creepBodies.bodyFor('miner', room.energyCapacityAvailable) || [];
+	const spawnTicks = body.length * CREEP_SPAWN_TIME;
+	const walkSteps = roundTripTicks(room, source) / 2;
+	return spawnTicks + walkSteps * minerTicksPerStep(room) + HANDOVER_MARGIN_TICKS;
+}
+
+// Sources whose sitting miner is inside its lead window and has no relief ordered yet.
+function sourcesNeedingRelief(room) {
+	const needing = [];
+	for (const source of room.find(FIND_SOURCES)) {
+		const lead = minerLeadTicks(room, source);
+		const dying = _.some(
+			Game.creeps,
+			creep =>
+				creep.memory.role === 'miner' &&
+				creep.memory.task && creep.memory.task.targetId === source.id &&
+				creep.ticksToLive !== undefined && creep.ticksToLive < lead
+		);
+		const hasRelief = _.some(Game.creeps, creep => creep.memory.standbyFor === source.id);
+		if (dying && !hasRelief) needing.push(source.id);
+	}
+	return needing;
+}
+
 // Without a miner nothing enters the economy, and without a hauler nothing reaches the spawn, so
 // either shortage is self-perpetuating: the room stops accumulating and can never reach the energy
 // its full-size body needs. In that state the right move is a small creep now over a proper one
@@ -164,4 +204,5 @@ module.exports = {
 	countRole,
 	isEmergency,
 	migrateGeneralists,
+	sourcesNeedingRelief,
 };

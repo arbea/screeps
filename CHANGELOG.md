@@ -52,3 +52,9 @@ changes are recorded only here.
 - Track how long each non-combat creep stands idle, and hold it under ten seconds as goal 4.
 - Mirror the hourly entry into the ally's shared ledger by that page's own sentry flow, throttled so restarts don't stamp extra lines.
 - Stop the watcher waking on ally ack churn - a read receipt appears one cycle and clears the next.
+- Count a remote source as operating only if a route exists from our entry inside its room - E47S28's walls seal our whole border, so its mining paused.
+- Loot ruins and tombstones like any other pile, the only demolition the game allows.
+- Order a relief miner one lead time before its predecessor dies, and have it wait beside the pit.
+- Draw a glyph on every point structure and map marker, creep-bubble style, so a phone can tell a tower from an extension.
+- Keep every goal card alive across data loss, and split one-time missions from metrics that never close.
+- Adopt the ally's fixed append flow - one sectioned call per ledger entry, verified or retried.

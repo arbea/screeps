@@ -25,7 +25,8 @@ function trackIdle() {
 		if (creep.spawning || COMBAT_ROLES.has(creep.memory.role)) continue;
 
 		stats.total++;
-		const hasWork = Boolean(creep.memory.task);
+		// A relief miner standing by its post is on assignment, not idle - the waiting is the job.
+		const hasWork = Boolean(creep.memory.task || creep.memory.standbyFor);
 		if (hasWork) {
 			delete creep.memory.idleSince;
 			continue;

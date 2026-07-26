@@ -59,6 +59,16 @@ function addPopulationRequests(room, requests) {
 
 		requests.push({ role, body });
 	}
+
+	// Relief miners are ordered while their predecessor still lives, so the source never sits
+	// idle through a spawn-plus-walk. The memory names the source; the relief walks there and
+	// waits beside it, and the headcount above already includes it, so nothing double-orders.
+	for (const sourceId of population.sourcesNeedingRelief(room)) {
+		const body = creepBodies.bodyFor('miner', budget);
+		if (!body) continue;
+
+		requests.push({ role: 'miner', body, memory: { role: 'miner', standbyFor: sourceId } });
+	}
 }
 
 function getSpawnRequests(room) {

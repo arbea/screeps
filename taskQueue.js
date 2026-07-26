@@ -98,7 +98,10 @@ function addRecycleTasks(room, tasks) {
 
 	for (const name in Game.creeps) {
 		const creep = Game.creeps[name];
-		const idleMinerHere = creep.room.name === room.name && creep.memory.role === 'miner' && !creep.memory.task;
+		// A relief miner is idle on purpose - it is waiting out its predecessor's last ticks beside
+		// the source - and recycling it would undo the early spawn that put it there.
+		const idleMinerHere =
+			creep.room.name === room.name && creep.memory.role === 'miner' && !creep.memory.task && !creep.memory.standbyFor;
 		if (!idleMinerHere) continue;
 
 		tasks.push({

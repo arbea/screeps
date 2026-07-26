@@ -31,6 +31,7 @@ function updateRoomIntel() {
 			filter: structure => structure.structureType === STRUCTURE_TOWER,
 		});
 
+		const previous = Memory.rooms[roomName] || {};
 		Memory.rooms[roomName] = {
 			lastSeen: Game.time,
 			sourceIds: sources.map(source => source.id),
@@ -41,8 +42,85 @@ function updateRoomIntel() {
 			towers: towers.length,
 			towerEnergy: towers.reduce((sum, tower) => sum + (tower.store ? tower.store[RESOURCE_ENERGY] : 0), 0),
 			spawns: room.find(FIND_HOSTILE_SPAWNS).length,
+			// Carried over rather than recomputed: this record is rebuilt every intel tick, but
+			// reachability rests on PathFinder work redone only every REACHABILITY_RECHECK_TICKS.
+			unreachableSources: previous.unreachableSources,
+			reachabilityAt: previous.reachabilityAt,
 		};
+
+		const isRemoteRoom = (Memory.remoteRooms || []).includes(roomName);
+		if (isRemoteRoom) updateSourceReachability(room);
 	}
+}
+
+// A remote source only counts as operating if a creep that has entered from our side can walk to
+// it without leaving the room again. E47S28's relic walls sealed the pocket behind our entry:
+// PathFinder still "reached" (27,20) by exiting through a second door and re-entering elsewhere,
+// a 190-step detour that turned each 50-energy trip into a 600-tick loss. Confining the test to
+// the room (maxRooms: 1) is exactly what makes that detour count as no route at all.
+const REACHABILITY_RECHECK_TICKS = 500;
+
+const EXIT_FIND_BY_DIRECTION = {
+	1: FIND_EXIT_TOP,
+	3: FIND_EXIT_RIGHT,
+	5: FIND_EXIT_BOTTOM,
+	7: FIND_EXIT_LEFT,
+};
+
+// The tiles our creeps can arrive on: this room's exits toward any owned neighbour. Every tile,
+// not a sample - the first version took every third one and branded a reachable source as walled
+// off, because the one corridor through the relic walls was narrower than the sampling stride.
+function entryTilesFromHome(room) {
+	const tiles = [];
+	const exits = Game.map.describeExits(room.name) || {};
+	for (const direction in exits) {
+		const neighbour = Game.rooms[exits[direction]];
+		const neighbourIsOurs = neighbour && neighbour.controller && neighbour.controller.my;
+		if (!neighbourIsOurs) continue;
+
+		for (const tile of room.find(EXIT_FIND_BY_DIRECTION[direction]) || []) tiles.push(tile);
+	}
+	return tiles;
+}
+
+function structuresBlockedCosts(room) {
+	const costs = new PathFinder.CostMatrix();
+	for (const structure of room.find(FIND_STRUCTURES)) {
+		if (structure.structureType === STRUCTURE_ROAD) costs.set(structure.pos.x, structure.pos.y, 1);
+		else if (structure.structureType !== STRUCTURE_CONTAINER && structure.structureType !== STRUCTURE_RAMPART) {
+			costs.set(structure.pos.x, structure.pos.y, 0xff);
+		}
+	}
+	return costs;
+}
+
+function updateSourceReachability(room) {
+	const intel = Memory.rooms[room.name];
+	if (!intel || !intel.sourceIds) return;
+
+	const fresh = intel.reachabilityAt !== undefined && Game.time - intel.reachabilityAt < REACHABILITY_RECHECK_TICKS;
+	if (fresh) return;
+
+	const entries = entryTilesFromHome(room);
+	if (entries.length === 0) return;
+
+	const costs = structuresBlockedCosts(room);
+	const unreachable = [];
+	for (const source of room.find(FIND_SOURCES)) {
+		const reachable = entries.some(entry => {
+			const result = PathFinder.search(entry, { pos: source.pos, range: 1 }, {
+				maxRooms: 1,
+				maxOps: 4000,
+				roomCallback: () => costs,
+			});
+			return !result.incomplete;
+		});
+		if (!reachable) unreachable.push(source.id);
+	}
+
+	if (unreachable.length > 0) log(`[外礦] ${room.name} 有 ${unreachable.length} 個礦源從我方入口無路可達,不列為運轉礦`);
+	intel.unreachableSources = unreachable;
+	intel.reachabilityAt = Game.time;
 }
 
 function scoreRoom(roomName) {
@@ -57,10 +135,17 @@ function scoreRoom(roomName) {
 	// keep sending reservers to overwrite their claim on a room they are already mining, which
 	// is the same trespass as attacking them - just slower.
 	const takenByAlly = hostiles.isAlly(intel.owner) || hostiles.isAlly(intel.reservedBy);
-	const disqualified = takenByAlly || !!intel.owner || intel.sourceIds.length < config.MIN_SOURCES_FOR_REMOTE;
+
+	// Only sources a creep can actually walk to count toward the room's worth - E47S28 has two,
+	// both sealed behind relic walls, and scoring them kept a mining operation alive that no
+	// creep could perform.
+	const unreachable = new Set(intel.unreachableSources || []);
+	const reachableSources = intel.sourceIds.filter(id => !unreachable.has(id));
+
+	const disqualified = takenByAlly || !!intel.owner || reachableSources.length < config.MIN_SOURCES_FOR_REMOTE;
 	if (disqualified) return -Infinity;
 
-	return intel.sourceIds.length * 10 - intel.hostileCount * 100;
+	return reachableSources.length * 10 - intel.hostileCount * 100;
 }
 
 // Adjacent room names are inherently capped at 4 (one per compass direction), so this can
@@ -163,7 +248,12 @@ function addRemoteTasks(homeRoom, myUsername, tasks) {
 			});
 		}
 
+		const unreachable = new Set(intel.unreachableSources || []);
 		for (const sourceId of intel.sourceIds) {
+			// No route from our entry means not an operating source - harvesting it would spend
+			// creep lifetimes on a detour that costs more than the energy it brings back.
+			if (unreachable.has(sourceId)) continue;
+
 			tasks.push({
 				id: `${TASK_TYPES.REMOTE_HARVEST}:${sourceId}`,
 				type: TASK_TYPES.REMOTE_HARVEST,
@@ -235,7 +325,12 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 			});
 		}
 
+		const unreachable = new Set(intel.unreachableSources || []);
 		for (const sourceId of intel.sourceIds) {
+			// Same rule as the task side: a source with no route from our entry gets no body
+			// spawned for it either, or the spawn keeps replacing a creep the queue will never feed.
+			if (unreachable.has(sourceId)) continue;
+
 			const hasHarvester = countCreepsAssignedTo(sourceId) > 0;
 			if (!hasHarvester) {
 				requests.push({

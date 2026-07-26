@@ -47,6 +47,7 @@
 - 能從 dashboard 現有快取拿到的,就不要打 Screeps。dashboard 的資料最多 90 秒舊,絕大多數判斷都夠用。
 - **終端機這邊的呼叫一律走 `node tools/screeps-call.js <METHOD> <path> [json]`**,它會呼叫 Screeps 並把這次呼叫記進帳本。直接用 `https.request` 打 screeps.com 的話,計量器看不到——而當初打爆額度的正是終端機這邊,一個看不到最大消費者的計量器等於沒有。
 - **Screeps 的回應不帶任何 `X-RateLimit-*` 標頭**(實測確認過,不是假設)。所以剩餘額度是本機對照官方公布上限累計出來的,不是帳號回報值。
+- **`/api/user/memory` 有低於「1440/天」的短窗限制**(2026-07-26 第二次 429 實證:retry-after 約 48 分,當時全天讀取遠低於 1440)。肇因是我的診斷模式:一小時內十幾輪「console 寫 __diag + memory 讀回」再加上重啟後的輪詢。**診斷讀回要合併與配給**——能等 dashboard 下一輪輪詢就等(整棵 Memory 都會帶回來,__diag 也在裡面),直接 GET memory 一小時最多個位數次。另:429 的 retry-after 數值偏保守,實際恢復更快,但不要以此為由去試。
 
 ---
 
@@ -103,6 +104,8 @@
 
 新增目標就加進 `goalsSnapshot()`,而且**必須附一個實際量得到的數字**。
 
+**目標與任務是兩種東西**:目標是指標,達成了也要永遠追蹤、**永不移除**;任務是一次性的(如向上擴張),完成後保留紀錄。兩者都有落盤保存(`goals-last.json` / `missions-last.json`)——429 退避把快取清空時,卡片顯示最後數據並標「資料暫停更新中」,絕不消失。目前排序:1 AI用量、2 API、3 礦源虧損、4 閒置、5 升級;佔領卡在任務區。
+
 ---
 
 ## 7. 同盟
@@ -133,7 +136,7 @@ E47S29,RCL 2。extension 5/5 已達上限——**這一級沒有任何建築能�
 - **E48S29 由 parnell 持有,房內 4 個敵方單位**。舊 bug(只讀盟友情報的 owner 形狀,不讀自家的)讓目標頁一直顯示「無主」。「佔領右側礦場」實際上是對有主房間開戰——RCL2 零戰力做不到,也不該由我單方面決定開打。這個目標先擱置,卡在哪一步儀表板現在照實顯示。
 - **(45,7) 虧損已破案,兩個原因**:①繞人重算的路徑忘了把建築設成障礙,一條穿過 extension 的路讓礦工 349 tick 走不出家門(movement.js 已修);②應急 1W 礦工佔著唯一礦位,挖 2/tick 對重生 10/tick。它 ttl 到 ~81803000 自然死亡後會補 5W 正規體型——下次巡檢確認替補的 WORK 數。注意 `strategySnapshot` 的 `currentMiners` 只數頭數不數 WORK,體型不足在儀表板上看不出來。
 
-- **E47S28 的 117 面遺跡牆堵住 (27,20) 礦源的入口**:remoteHarvester 被迫繞 190 步(出房再從別的入口進),一趟 ~600 tick 搬 50 能量,不經濟。無主房不能 destroy(),要嘛派 WORK creep 拆出通道(DISMANTLE 任務還沒有),要嘛先降低該源優先度。另一顆 (39,35) 不受影響。
+- **E47S28 自我方邊界整條被遺跡牆封死**(決定性測試:限制兩房內,從家 spawn 到兩顆源的路都在邊界牆前中斷)。所以:兩顆源都標記 unreachable(expansion.js 每 500 tick 以「入口格→源、maxRooms:1」重測)、外礦自動暫停、scoreRoom 只數可達源(房間會自動退出 remoteRooms)、**佔領目標實際卡在打通圍牆**——reserver 也進不去。要重啟外礦得先派 WORK creep 拆出通道(DISMANTLE 任務類型還不存在)。兩隻困住的 remoteHarvester 已轉 generalist。
 - **閒置目標(第 4)已上線**:idleStats.js 每 tick 記非戰鬥 creep 的無任務時間(defender 系除外),300-tick 滾動窗口;快照帶 `idleTicks`,目標頁顯示最長閒置與窗口比例,上限 10 秒(約 3 tick)。第一筆讀數就抓到 upgrader 閒置 18 tick——值得追。
 
 已解決、留個座標:REPAIR 任務從 108 → 32——牆不會衰減,永遠低於 80% 門檻是因為 hitsMax 是 3 億,已把牆排除在維修掃描外(taskQueue.js getRepairTargetIds)。剩下的 32 筆是路和容器的正當衰減維護。E47S29 的 76 面遺跡牆已由 `clearRelicWalls`(taskQueue.js,50 tick 一掃)全數 destroy(),實測 76 → 0;新房間入手後同一機制自動生效。
