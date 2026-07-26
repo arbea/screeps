@@ -89,11 +89,23 @@ function runSpawnQueue(room) {
 	const belowFloor = room.energyAvailable < config.MIN_ENERGY_TO_SPAWN;
 	if (belowFloor && !population.isEmergency(room)) return;
 
-	// Pick the highest-priority request we can actually afford, not just the top request -
-	// otherwise one expensive high-priority body (e.g. a CLAIM-part reserver) permanently
-	// blocks every cheaper request behind it whenever the room can't yet afford it.
 	const requests = getSpawnRequests(room);
-	const request = requests.find(candidate => room.energyAvailable >= creepBodies.bodyCost(candidate.body));
+
+	// Skipping to a cheaper request is right only when the expensive one is out of reach for good.
+	// A miner costing 550 in a room whose extensions hold 550 is affordable the moment they fill -
+	// but a 500-energy hauler behind it kept spending the room back down to 428, so the miner was
+	// never reachable and the room ran a source short indefinitely. Anything the room could pay for
+	// at full capacity is worth waiting for; anything it could not is what the fallthrough is for,
+	// so an unbuildable reserver still can't block the queue.
+	const worthWaitingFor = requests.find(
+		candidate => creepBodies.bodyCost(candidate.body) <= room.energyCapacityAvailable
+	);
+	const affordableNow = requests.find(candidate => room.energyAvailable >= creepBodies.bodyCost(candidate.body));
+
+	const savingUp = worthWaitingFor && worthWaitingFor !== affordableNow;
+	if (savingUp) return;
+
+	const request = affordableNow;
 	if (!request) return;
 
 	const cost = creepBodies.bodyCost(request.body);

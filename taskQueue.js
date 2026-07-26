@@ -373,11 +373,44 @@ function isCreepReadyForTask(creep, taskType) {
 	return creep.store[RESOURCE_ENERGY] > 0;
 }
 
+// What each specialised role is allowed to work on. Restricting who may take a task was only half
+// the problem: an upgrader still has CARRY, hauling outranks upgrading, and nothing stopped it
+// taking the haul - so the controller stayed idle while the creep hired to raise it ferried energy.
+// A role has to be a commitment in both directions, or the low priority its own job carries means
+// it never gets done.
+//
+// Builders keep repair as well, because a room with nothing to build still has roads decaying, and
+// an idle builder is the obvious one to send. Roles absent here - and creeps with no role at all -
+// fall through to the capability check and may take anything they can physically do.
+const ROLE_DUTIES = {
+	miner: [TASK_TYPES.MINE],
+	hauler: [TASK_TYPES.HAUL],
+	upgrader: [TASK_TYPES.UPGRADE],
+	builder: [TASK_TYPES.BUILD, TASK_TYPES.REPAIR],
+	scout: [TASK_TYPES.SCOUT],
+	reserver: [TASK_TYPES.RESERVE_CONTROLLER],
+	remoteHarvester: [TASK_TYPES.REMOTE_HARVEST],
+	defender: [TASK_TYPES.DEFENSE],
+	remoteDefender: [TASK_TYPES.REMOTE_DEFENSE],
+};
+
+function isWithinRoleDuties(creep, taskType) {
+	const duties = ROLE_DUTIES[creep.memory.role];
+	if (!duties) return true;
+
+	// The last-resort self-serve harvest stays open to everyone: it is how a specialist that ran
+	// dry with no supply on the ledger earns its own energy back rather than standing still.
+	if (taskType === TASK_TYPES.HARVEST) return true;
+
+	return duties.includes(taskType);
+}
+
 function canCreepDoTask(creep, task) {
 	// Matched by name rather than by body: a recycle task names the single creep it disposes of,
 	// and any other creep taking it would walk to the spawn and destroy itself.
 	if (task.type === TASK_TYPES.RECYCLE) return creep.name === task.recycleCreepName;
 
+	if (!isWithinRoleDuties(creep, task.type)) return false;
 	if (!hasCapabilityForTask(creep, task.type)) return false;
 	return isCreepReadyForTask(creep, task.type);
 }
