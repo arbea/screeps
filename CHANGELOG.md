@@ -21,3 +21,7 @@ changes are recorded only here.
 - Answer dashboard messages from the terminal session that has the context, not a cold one per message.
 - Rebuild the dashboard phone-first: bottom tabs, one view at a time, chat first, unread dot.
 - Keep a chat message in the box when the send fails, instead of clearing it and losing it.
+- Rebuild again as three swipeable pages - chat, map, goals/log - with arrows for the desk.
+- Count every Screeps API call against its published limit, since the responses carry no headers.
+- Route terminal-side Screeps calls through screeps-call.js so the meter can see them.
+- Measure AI usage from session transcripts and stand down at 85% until the window resets.
