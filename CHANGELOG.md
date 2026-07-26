@@ -18,3 +18,4 @@ changes are recorded only here.
 - Let miners stand on their square rather than beside it.
 - Skip spawn requests whose body the room cannot afford.
 - Score only rooms surveyed first-hand, since an ally's report carries no source list.
+- Answer dashboard messages from the terminal session that has the context, not a cold one per message.
