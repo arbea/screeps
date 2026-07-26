@@ -15,6 +15,7 @@ function buildTaskQueue(room) {
 	addBuildTasks(room, tasks);
 	addRepairTasks(room, tasks);
 	addUpgradeTask(room, tasks);
+	addRecycleTasks(room, tasks);
 	tasks.push(...expansion.runExpansion(room));
 
 	tasks.sort((a, b) => b.priority - a.priority);
@@ -95,15 +96,25 @@ function addMiningTasks(room, tasks) {
 		// walkable tiles surround it, or how many are needed to saturate its regen rate given
 		// the current (energy-capacity-limited) miner body size - extra miners beyond either
 		// limit don't add throughput, they just crowd the tile.
+		// Each miner is given one specific square rather than "somewhere next to the source":
+		// two miners told only to approach the source path to the same nearest square and shove
+		// each other off it forever. Keying the task by its square (instead of a slot number)
+		// also keeps ids stable when a miner dies - the survivors keep their squares, and only
+		// the vacated one is reissued.
 		const maxMiners = mining.maxMinersForSource(room, source);
 		const currentMiners = countCreepsAssignedTo(source.id, TASK_TYPES.MINE);
-		const openMinerSlots = Math.max(0, maxMiners - currentMiners);
+		const claimedTiles = getClaimedMineTiles(source.id);
+		const freeTiles = mining.getMiningTiles(room, source).filter(tile => !claimedTiles.has(`${tile.x},${tile.y}`));
+
+		const openMinerSlots = Math.max(0, Math.min(maxMiners - currentMiners, freeTiles.length));
 		for (let slot = 0; slot < openMinerSlots; slot++) {
+			const tile = freeTiles[slot];
 			tasks.push({
-				id: `${TASK_TYPES.MINE}:${source.id}:${currentMiners + slot}`,
+				id: `${TASK_TYPES.MINE}:${source.id}:${tile.x},${tile.y}`,
 				type: TASK_TYPES.MINE,
 				priority: config.PRIORITY.HARVEST,
 				targetId: source.id,
+				workPos: { x: tile.x, y: tile.y },
 			});
 		}
 
@@ -139,6 +150,33 @@ function addMiningTasks(room, tasks) {
 				targetId: source.id,
 			});
 		}
+	}
+}
+
+// A miner is WORK and MOVE only - with no carry capacity it cannot build, haul or upgrade, so a
+// miner without a square to work is worth nothing alive. Surplus appears on its own as the room
+// grows: bigger bodies saturate a source with fewer miners, so maxMinersForSource shrinks and the
+// older, smaller miners become redundant. Recycling returns half their build cost and frees the
+// square they were standing on, which beats waiting out their remaining lifetime.
+//
+// Squares, not miner headcount, decide who is surplus - only miners that failed to claim one are
+// recycled, so this can never take a miner away from a source that still has room for it.
+function addRecycleTasks(room, tasks) {
+	const spawn = room.find(FIND_MY_SPAWNS)[0];
+	if (!spawn) return;
+
+	for (const name in Game.creeps) {
+		const creep = Game.creeps[name];
+		const idleMinerHere = creep.room.name === room.name && creep.memory.role === 'miner' && !creep.memory.task;
+		if (!idleMinerHere) continue;
+
+		tasks.push({
+			id: `${TASK_TYPES.RECYCLE}:${creep.name}`,
+			type: TASK_TYPES.RECYCLE,
+			priority: config.PRIORITY.HARVEST_FALLBACK,
+			targetId: spawn.id,
+			recycleCreepName: creep.name,
+		});
 	}
 }
 
@@ -242,6 +280,16 @@ function placeExtensionSites(room, spawn, count) {
 			}
 		}
 	}
+}
+
+function getClaimedMineTiles(sourceId) {
+	const claimed = new Set();
+	for (const name in Game.creeps) {
+		const task = Game.creeps[name].memory.task;
+		const holdsTileHere = task && task.type === TASK_TYPES.MINE && task.targetId === sourceId && task.workPos;
+		if (holdsTileHere) claimed.add(`${task.workPos.x},${task.workPos.y}`);
+	}
+	return claimed;
 }
 
 function countCreepsAssignedTo(targetId, taskType) {
@@ -374,6 +422,10 @@ function isCreepReadyForTask(creep, taskType) {
 }
 
 function canCreepDoTask(creep, task) {
+	// Matched by name rather than by body: a recycle task names the single creep it disposes of,
+	// and any other creep taking it would walk to the spawn and destroy itself.
+	if (task.type === TASK_TYPES.RECYCLE) return creep.name === task.recycleCreepName;
+
 	if (!hasCapabilityForTask(creep, task.type)) return false;
 	return isCreepReadyForTask(creep, task.type);
 }

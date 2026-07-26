@@ -33,6 +33,24 @@ function getAccessibleTiles(room, pos) {
 	return tiles;
 }
 
+// The squares a miner can work this source from, container first: a miner drops its energy on
+// the square it stands on, so putting it on the container is the difference between the energy
+// being stored and it decaying on the ground. Order is otherwise the fixed scan order of
+// getAccessibleTiles, so a given square keeps its place in the list from tick to tick.
+function getMiningTiles(room, source) {
+	const containerKeys = new Set(
+		source.pos
+			.findInRange(FIND_STRUCTURES, 1, {
+				filter: structure => structure.structureType === STRUCTURE_CONTAINER,
+			})
+			.map(container => `${container.pos.x},${container.pos.y}`)
+	);
+
+	return getAccessibleTiles(room, source.pos).sort(
+		(a, b) => (containerKeys.has(`${a.x},${a.y}`) ? 0 : 1) - (containerKeys.has(`${b.x},${b.y}`) ? 0 : 1)
+	);
+}
+
 // A source's harvest rate caps out once total WORK parts working it reach SATURATION_WORK -
 // beyond that, extra miners don't add throughput. So the real limit on how many miners a
 // source supports is whichever is smaller: how many fit around it, or how many are needed
@@ -116,6 +134,7 @@ function haulSlotsForSource(room, source) {
 module.exports = {
 	minerWorkCount,
 	getAccessibleTiles,
+	getMiningTiles,
 	maxMinersForSource,
 	haulSlotsForSource,
 	fallbackHarvestSlotsForSource,

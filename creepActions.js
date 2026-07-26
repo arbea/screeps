@@ -148,10 +148,17 @@ function runRemoteHarvest(creep, source) {
 	return false;
 }
 
-function runMine(creep, source) {
-	const inRange = creep.pos.isNearTo(source);
-	if (!inRange) {
-		creep.moveTo(source);
+function runMine(creep, source, task) {
+	// Tasks issued before miners were given squares have none to hold. Ending one hands the miner
+	// back to the queue, which reissues it with a square on the next tick, so no migration step is
+	// needed for miners already in the field.
+	if (!task.workPos) return true;
+
+	// Once on its own square the miner never moves again: it harvests in place, and its energy
+	// drops onto whatever is beneath it - the container, if one was built there.
+	const atWorkPos = creep.pos.x === task.workPos.x && creep.pos.y === task.workPos.y;
+	if (!atWorkPos) {
+		creep.moveTo(task.workPos.x, task.workPos.y);
 		return false;
 	}
 	creep.harvest(source);
@@ -215,6 +222,18 @@ function runHaul(creep, source) {
 	return false;
 }
 
+// Never reports done: recycleCreep destroys the creep on success, so there is no creep left to
+// clear the task from. A failure (out of range, spawn busy) just retries next tick.
+function runRecycle(creep, spawn) {
+	const inRange = creep.pos.isNearTo(spawn);
+	if (!inRange) {
+		creep.moveTo(spawn);
+		return false;
+	}
+	spawn.recycleCreep(creep);
+	return false;
+}
+
 function runRemoteDefense(creep, task) {
 	const inTargetRoom = creep.room.name === task.targetRoomName;
 	if (!inTargetRoom) {
@@ -248,6 +267,7 @@ const ACTIONS = {
 	[TASK_TYPES.RESERVE_CONTROLLER]: runReserveController,
 	[TASK_TYPES.REMOTE_HARVEST]: runRemoteHarvest,
 	[TASK_TYPES.REMOTE_DEFENSE]: runRemoteDefense,
+	[TASK_TYPES.RECYCLE]: runRecycle,
 };
 
 // SCOUT and REMOTE_DEFENSE don't target a fixed object id (there's nothing to grab an id
@@ -285,7 +305,7 @@ function runCreep(creep) {
 		return;
 	}
 
-	const done = ACTIONS[task.type](creep, target);
+	const done = ACTIONS[task.type](creep, target, task);
 	if (done) {
 		logDone(creep, task, target);
 		delete creep.memory.task;

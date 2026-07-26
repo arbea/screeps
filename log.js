@@ -57,6 +57,8 @@ function describeTask(task, target) {
 			return `駐守開採 (${target.pos.x},${target.pos.y})`;
 		case TASK_TYPES.HAUL:
 			return `搬運能量 (${target.pos.x},${target.pos.y})`;
+		case TASK_TYPES.RECYCLE:
+			return '回收多餘礦工';
 		default:
 			return task.type;
 	}
