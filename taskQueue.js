@@ -47,7 +47,11 @@ function addDefenseTasks(room, tasks) {
 // This replaces the old "several generalists each self-haul" harvest pattern, which wastes
 // travel time and under-utilizes a source's regen rate compared to one saturated miner.
 function addMiningTasks(room, tasks) {
-	const sources = room.find(FIND_SOURCES_ACTIVE);
+	// Every source, not only the ones holding energy this tick: a miner's square belongs to the
+	// source rather than to its current contents, and a drained source refills on its own while the
+	// miner waits on it. Withdrawing the task meanwhile would leave the miner idle, which is exactly
+	// what marks it as surplus and recycles it.
+	const sources = room.find(FIND_SOURCES);
 
 	for (const source of sources) {
 		ensureContainerSite(room, source);
@@ -75,24 +79,6 @@ function addMiningTasks(room, tasks) {
 				priority: taskOrder.basePriority(TASK_TYPES.MINE),
 				targetId: source.id,
 				workPos: { x: tile.x, y: tile.y },
-			});
-		}
-
-
-		// An idle, empty-handed generalist that can't get a HAUL slot (e.g. the other source
-		// is temporarily depleted, or every slot is already taken) has no way to earn energy
-		// for BUILD/REPAIR/UPGRADE and just sits there. A last-resort, lowest-priority self-
-		// serve harvest fills whatever tile space the dedicated miners aren't already using,
-		// so idle labor can still make itself useful instead of waiting on nothing.
-		const fallbackSlots = mining.fallbackHarvestSlotsForSource(room, source);
-		const currentFallbackHarvesters = countCreepsAssignedTo(source.id, TASK_TYPES.HARVEST);
-		const openFallbackSlots = Math.max(0, fallbackSlots - currentFallbackHarvesters);
-		for (let slot = 0; slot < openFallbackSlots; slot++) {
-			tasks.push({
-				id: `${TASK_TYPES.HARVEST}:${source.id}:${currentFallbackHarvesters + slot}`,
-				type: TASK_TYPES.HARVEST,
-				priority: taskOrder.basePriority(taskOrder.HARVEST_FALLBACK),
-				targetId: source.id,
 			});
 		}
 	}
@@ -306,18 +292,11 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.DEFENSE || taskType === TASK_TYPES.REMOTE_DEFENSE) {
 		return partTypes.includes(ATTACK) || partTypes.includes(RANGED_ATTACK);
 	}
-	// CARRY as well as WORK: the point of the fallback harvest is to come away holding energy to
-	// spend on BUILD/REPAIR/UPGRADE. A miner has WORK but no carry capacity at all, so runHarvest
-	// reads it as instantly full and reports the task done every tick - it churns tasks forever
-	// without ever gathering anything.
-	if (taskType === TASK_TYPES.HARVEST) {
-		return partTypes.includes(WORK) && partTypes.includes(CARRY);
-	}
-	// Unlike HARVEST, this must stay restricted to the 'remoteHarvester' role: that's the only
-	// body built with CARRY parts (creepBodies.buildRemoteHarvesterBody) and homeRoom memory
-	// (expansion.js). A 'miner' also has WORK parts but zero CARRY capacity and no homeRoom, so
-	// if it slipped in here runRemoteHarvest's "am I full" check reads 0/0 as permanently full
-	// and the creep just loops toward `RoomPosition(25,25,undefined)` instead of ever mining.
+	// Restricted to the 'remoteHarvester' role: that's the only body built with CARRY parts
+	// (creepBodies.buildRemoteHarvesterBody) and homeRoom memory (expansion.js). A 'miner' also has
+	// WORK parts but zero CARRY capacity and no homeRoom, so if it slipped in here
+	// runRemoteHarvest's "am I full" check reads 0/0 as permanently full and the creep just loops
+	// toward `RoomPosition(25,25,undefined)` instead of ever mining.
 	if (taskType === TASK_TYPES.REMOTE_HARVEST) {
 		return creep.memory.role === 'remoteHarvester' && partTypes.includes(WORK);
 	}
@@ -351,7 +330,6 @@ function hasCapabilityForTask(creep, taskType) {
 
 function isCreepReadyForTask(creep, taskType) {
 	const gatheringTask =
-		taskType === TASK_TYPES.HARVEST ||
 		taskType === TASK_TYPES.DEFENSE ||
 		taskType === TASK_TYPES.REMOTE_HARVEST ||
 		taskType === TASK_TYPES.REMOTE_DEFENSE ||
@@ -397,10 +375,6 @@ const ROLE_DUTIES = {
 function isWithinRoleDuties(creep, taskType) {
 	const duties = ROLE_DUTIES[creep.memory.role];
 	if (!duties) return true;
-
-	// The last-resort self-serve harvest stays open to everyone: it is how a specialist that ran
-	// dry with no supply on the ledger earns its own energy back rather than standing still.
-	if (taskType === TASK_TYPES.HARVEST) return true;
 
 	return duties.includes(taskType);
 }

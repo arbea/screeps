@@ -19,15 +19,9 @@ function cleanDeadCreepMemory() {
 	}
 }
 
-function ensureConfigMemoryShape() {
-	if (!Memory.config) Memory.config = {};
-}
-
 function runMemory() {
 	if (!Memory.taskBacklog) Memory.taskBacklog = {};
 	if (!Memory.eventLog) Memory.eventLog = [];
-	ensureConfigMemoryShape();
-	config.applyOverrides();
 	cleanDeadCreepMemory();
 }
 

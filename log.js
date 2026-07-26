@@ -10,11 +10,7 @@ function log(message) {
 function pushEventLog(message) {
 	Memory.eventLog.push({ tick: Game.time, message });
 
-	const configuredSize = config.EVENT_LOG_SIZE;
-	const validSize = typeof configuredSize === 'number' && Number.isFinite(configuredSize) && configuredSize > 0;
-	const maxSize = validSize ? configuredSize : 50;
-
-	const overCap = Memory.eventLog.length > maxSize;
+	const overCap = Memory.eventLog.length > config.EVENT_LOG_SIZE;
 	if (overCap) Memory.eventLog.shift();
 }
 
@@ -35,8 +31,6 @@ function describeTask(task, target) {
 	}
 
 	switch (task.type) {
-		case TASK_TYPES.HARVEST:
-			return `礦源 (${target.pos.x},${target.pos.y})`;
 		case TASK_TYPES.REFILL_SPAWN:
 			return `${target.structureType === STRUCTURE_SPAWN ? 'Spawn' : 'Extension'} 補給`;
 		case TASK_TYPES.REFILL_TOWER:

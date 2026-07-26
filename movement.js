@@ -120,11 +120,23 @@ Creep.prototype.moveTo = function (first, second, third) {
 	const sameDestination =
 		cached && cached.dest.x === destination.x && cached.dest.y === destination.y && cached.dest.room === destination.roomName;
 
-	// Standing on the same square as last tick, having intended to move, means something is in the
-	// way rather than that the route was wrong.
-	const stuck = cached && samePosition(cached.last, { x: this.pos.x, y: this.pos.y, roomName: this.pos.roomName });
-	const stuckFor = stuck ? (cached.stuck || 0) + 1 : 0;
+	// The step counter advances on having actually moved, never on move() returning OK. OK means
+	// only that the intent was accepted - a creep told to walk into a wall gets OK and stays put.
+	// Counting that as progress walks the cursor down a route the creep never travelled, so every
+	// direction after it belongs to a square it isn't standing on, and it wanders until the path
+	// runs out. Position is the only honest evidence a step happened.
+	const currentPos = { x: this.pos.x, y: this.pos.y, roomName: this.pos.roomName };
+	if (cached && cached.last) {
+		const moved = !samePosition(cached.last, currentPos);
+		if (moved) {
+			cached.index++;
+			cached.stuck = 0;
+		} else {
+			cached.stuck = (cached.stuck || 0) + 1;
+		}
+	}
 
+	const stuckFor = cached ? cached.stuck || 0 : 0;
 	const needsPath = !cached || !sameDestination || cached.index >= cached.path.length || stuckFor >= STUCK_TICKS;
 	if (needsPath) {
 		const path = stuckFor >= STUCK_TICKS
@@ -141,16 +153,14 @@ Creep.prototype.moveTo = function (first, second, third) {
 			index: 0,
 			stuck: 0,
 		};
-	} else {
-		cached.stuck = stuckFor;
 	}
 
 	const move = this.memory._path;
-	const direction = Number(move.path[move.index]);
-	const result = this.move(direction);
+	const result = this.move(Number(move.path[move.index]));
 
-	if (result === OK) move.index++;
-	move.last = { x: this.pos.x, y: this.pos.y, roomName: this.pos.roomName };
+	// Recorded after the move is ordered but before it resolves, so next tick compares where the
+	// creep meant to leave from against where it actually is.
+	move.last = currentPos;
 
 	return result;
 };

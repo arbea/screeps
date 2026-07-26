@@ -115,7 +115,9 @@ function run() {
 
 function reportUsage(mode, skipped) {
 	const used = Game.cpu.getUsed();
-	Memory.cpuStats = { used, limit: Game.cpu.limit, bucket: Game.cpu.bucket, tick: Game.time, mode };
+	// The ceiling goes out with the reading. A bucket is only meaningful against the cap it fills
+	// toward, and anyone reading this from outside cannot infer which of the two applies.
+	Memory.cpuStats = { used, limit: Game.cpu.limit, bucket: Game.cpu.bucket, bucketCap: bucketCap(), tick: Game.time, mode };
 
 	if (skipped.length > 0) {
 		log(`[核心] CPU 保險絲跳脫(${used.toFixed(1)}/${Game.cpu.limit}),略過:${skipped.join('、')}`);

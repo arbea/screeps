@@ -69,15 +69,20 @@ function getSpawnRequests(room) {
 	const myUsername = room.controller.owner.username;
 	requests.push(...expansion.getExpansionSpawnRequests(room, myUsername));
 
+	// A role the room cannot afford a single repeat of yields no body at all, and everything below
+	// costs the body it is given. Dropping those in one place covers every source of requests at
+	// once, so a role that only becomes buildable at a higher RCL is simply absent until then.
+	const buildable = requests.filter(request => request.body);
+
 	// Every request carries its role, so the spec's production order is applied in one place here
 	// rather than being restated at each call site.
-	for (const request of requests) {
+	for (const request of buildable) {
 		if (request.priority === undefined) request.priority = spawnOrder.spawnPriority(request.role);
 		if (!request.memory) request.memory = { role: request.role };
 	}
 
-	requests.sort((a, b) => b.priority - a.priority);
-	return requests;
+	buildable.sort((a, b) => b.priority - a.priority);
+	return buildable;
 }
 
 function runSpawnQueue(room) {

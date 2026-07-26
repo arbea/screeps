@@ -1,10 +1,5 @@
 const TASK_TYPES = require('./taskTypes');
 
-// The last-resort self-serve harvest is a priority level, not a task type - the task it labels is
-// an ordinary HARVEST, which sits far higher up. It has no entry in TASK_TYPES, so it is named
-// here as the string callers pass to basePriority.
-const HARVEST_FALLBACK = 'HARVEST_FALLBACK';
-
 // Ordered by what the room loses if the task goes undone, worst first. This replaces the
 // drag-and-drop editor: the ordering was never really a preference, it is a consequence of what
 // depends on what. Nothing can be produced without energy in the spawn, nothing can be hauled that
@@ -17,7 +12,6 @@ const TASK_ORDER = [
 	TASK_TYPES.REMOTE_DEFENSE,
 	TASK_TYPES.REFILL_TOWER,
 	TASK_TYPES.MINE,
-	TASK_TYPES.HARVEST,
 	TASK_TYPES.HAUL,
 	TASK_TYPES.RESERVE_CONTROLLER,
 	TASK_TYPES.REMOTE_HARVEST,
@@ -26,7 +20,6 @@ const TASK_ORDER = [
 	TASK_TYPES.REFILL_SPAWN,
 	TASK_TYPES.UPGRADE,
 	TASK_TYPES.SCOUT,
-	HARVEST_FALLBACK,
 	TASK_TYPES.RECYCLE,
 ];
 
@@ -69,4 +62,4 @@ function refillPriority(room) {
 	return escalate(base, 1 - room.energyAvailable / room.energyCapacityAvailable);
 }
 
-module.exports = { basePriority, upgradePriority, refillPriority, TASK_ORDER, HARVEST_FALLBACK };
+module.exports = { basePriority, upgradePriority, refillPriority, TASK_ORDER };

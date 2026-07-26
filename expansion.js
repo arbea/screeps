@@ -49,6 +49,10 @@ function scoreRoom(roomName) {
 	const intel = Memory.rooms[roomName];
 	if (!intel) return -Infinity;
 
+	// Intel merged from an ally reports what they saw, which need not include a source survey. A
+	// room nobody has stood in on our behalf cannot be scored as a mining candidate at all.
+	if (!intel.sourceIds) return -Infinity;
+
 	// A room an ally has claimed or reserved is theirs. Without the reservation check we would
 	// keep sending reservers to overwrite their claim on a room they are already mining, which
 	// is the same trespass as attacking them - just slower.

@@ -44,8 +44,11 @@ function haulerTarget(room, haulerBody) {
 	return Math.ceil(inFlight / capacity);
 }
 
+// Counted across every source rather than only those holding energy, so the establishment doesn't
+// shrink while a source regenerates - a miner lost in that window would otherwise go unreplaced
+// until the source refilled, which is the moment the room most needs it already standing there.
 function minerTarget(room) {
-	return room.find(FIND_SOURCES_ACTIVE).reduce((sum, source) => sum + mining.maxMinersForSource(room, source), 0);
+	return room.find(FIND_SOURCES).reduce((sum, source) => sum + mining.maxMinersForSource(room, source), 0);
 }
 
 // Builders are sized by the work outstanding rather than by a headcount: 5000 energy of remaining

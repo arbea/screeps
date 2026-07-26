@@ -14,33 +14,6 @@ function runDefense(creep, hostile) {
 	return false;
 }
 
-function runHarvest(creep, source) {
-	const full = creep.store.getFreeCapacity() === 0;
-	if (full) return true;
-
-	// A pile beside the source fills the creep in one tick where mining it takes 25, and the
-	// energy on the ground is decaying while the source's is not - so whenever there's a pile
-	// to take, taking it beats mining on both counts.
-	const pile = source.pos.findInRange(FIND_DROPPED_RESOURCES, 2)[0];
-	if (pile) {
-		const atPile = creep.pos.isNearTo(pile);
-		if (!atPile) {
-			creep.moveTo(pile);
-			return false;
-		}
-		creep.pickup(pile);
-		return false;
-	}
-
-	const inRange = creep.pos.isNearTo(source);
-	if (!inRange) {
-		creep.moveTo(source);
-		return false;
-	}
-	creep.harvest(source);
-	return false;
-}
-
 function runRefill(creep, structure) {
 	const energyEmpty = creep.store[RESOURCE_ENERGY] === 0;
 	if (energyEmpty) return true;
@@ -177,7 +150,9 @@ function runMine(creep, source, task) {
 	// drops onto whatever is beneath it - the container, if one was built there.
 	const atWorkPos = creep.pos.x === task.workPos.x && creep.pos.y === task.workPos.y;
 	if (!atWorkPos) {
-		creep.moveTo(task.workPos.x, task.workPos.y);
+		// The square itself, not a tile beside it: what the miner drops lands where it stands, and
+		// beside the container is the ground.
+		creep.moveTo(task.workPos.x, task.workPos.y, { range: 0 });
 		return false;
 	}
 	creep.harvest(source);
@@ -298,7 +273,6 @@ const ACTIONS = {
 	[TASK_TYPES.DEFENSE]: runDefense,
 	[TASK_TYPES.REFILL_SPAWN]: runRefill,
 	[TASK_TYPES.REFILL_TOWER]: runRefill,
-	[TASK_TYPES.HARVEST]: runHarvest,
 	[TASK_TYPES.MINE]: runMine,
 	[TASK_TYPES.HAUL]: runHaul,
 	[TASK_TYPES.BUILD]: runBuild,

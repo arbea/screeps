@@ -39,15 +39,13 @@ function publishStrategySnapshot(room) {
 
 	// Haulers are no longer counted per source - they belong to none - so this reports only what
 	// is still a per-source quantity: who is mining it and who is self-serving from it.
-	const sources = room.find(FIND_SOURCES_ACTIVE);
+	const sources = room.find(FIND_SOURCES);
 	const perSource = sources.map(source => ({
 		sourceId: source.id,
 		pos: { x: source.pos.x, y: source.pos.y },
 		accessibleTiles: mining.getAccessibleTiles(room, source.pos).length,
 		minerCapacity: mining.maxMinersForSource(room, source),
 		currentMiners: countCreepsAssignedTo(source.id, 'MINE'),
-		fallbackCapacity: mining.fallbackHarvestSlotsForSource(room, source),
-		currentFallbackHarvesters: countCreepsAssignedTo(source.id, 'HARVEST'),
 	}));
 
 	const requests = logistics.collectRequests(room);
@@ -72,7 +70,6 @@ function publishStrategySnapshot(room) {
 			upgrader: population.countRole(room, 'upgrader'),
 			activeHaulers: countActiveHaulers(room),
 			idleBroke: countIdleBrokeGeneralists(room),
-			fallbackCapacity: perSource.reduce((sum, s) => sum + s.fallbackCapacity, 0),
 		},
 		// Published so the population maths is inspectable rather than trusted.
 		population: {
