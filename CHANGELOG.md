@@ -72,3 +72,4 @@ changes are recorded only here.
 - Never trust a 429's retry-after below our own doubling backoff (dashboard) - an 18-second figure was quoted mid-lockout and the retry was refused again.
 - Give every goal and mission card its own execution log - what was done, when, and what is being waited on - capped at 1000 characters each, written via tools/goal-log.js.
 - State the autonomous priority protocol in the handbook: work one goal at a time in card order, move down only when the current one is waiting on observation, read the log tails before redoing anything.
+- Judge source-regen loss on the user's marks - under 5% good, under 10% needs fixing, 10%+ failing - and on the rolling ten-cycle window, so a landed fix shows on the card instead of hiding under the lifetime average.
