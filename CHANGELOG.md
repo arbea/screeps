@@ -62,3 +62,4 @@ changes are recorded only here.
 - Let the terminal ask the dashboard for allowance before spending a call, so both consumers obey one ledger.
 - Keep terrain on disk - restarts were re-buying rock that cannot move.
 - Require a proven route as an explicit step in every expansion mission, tested from our entry inside the room.
+- Stop an empty snapshot reading as "nobody idle" - no data now defers to the last real reading, marked paused.
