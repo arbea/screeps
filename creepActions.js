@@ -76,7 +76,12 @@ function runRepair(creep, structure) {
 	return false;
 }
 
-function runUpgrade(creep, controller) {
+function runUpgrade(creep, controller, task) {
+	// Tasks issued before upgrading was sliced into slots carry none. Ending one hands the
+	// upgrader back to the queue, which reissues slotted ids on the next tick - the same
+	// migration path the miners' workPos went through.
+	if (task.slot === undefined) return true;
+
 	const energyEmpty = creep.store[RESOURCE_ENERGY] === 0;
 	if (energyEmpty) return refuel(creep);
 

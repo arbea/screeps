@@ -63,3 +63,10 @@ changes are recorded only here.
 - Keep terrain on disk - restarts were re-buying rock that cannot move.
 - Require a proven route as an explicit step in every expansion mission, tested from our entry inside the room.
 - Stop an empty snapshot reading as "nobody idle" - no data now defers to the last real reading, marked paused.
+- Give the upgrade job one task per standing spot - a single task id capped the crew at one, and every extra upgrader the maths asked for idled its whole life.
+- Recycle idle scouts and breachers the moment the map demands none, the same way surplus miners already go.
+- Let a creep idle in an unowned room be re-tasked by the room that sent it - a breacher finished its job abroad and no queue could ever see it again.
+- Stop the stall check stripping a dismantler parked at its wall - standing still for thousands of ticks is what breaching an 881k-hit wall looks like.
+- Carry the breach plan across intel rebuilds instead of deriving it fresh every ten ticks, and say so in the log when no plan can be found at all.
+- Breach walls entry-side first, so the wall the plan names is always one the breacher can reach.
+- Never trust a 429's retry-after below our own doubling backoff (dashboard) - an 18-second figure was quoted mid-lockout and the retry was refused again.

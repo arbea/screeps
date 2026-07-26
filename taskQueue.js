@@ -90,8 +90,22 @@ function addMiningTasks(room, tasks) {
 // older, smaller miners become redundant. Recycling returns half their build cost and frees the
 // square they were standing on, which beats waiting out their remaining lifetime.
 //
-// Squares, not miner headcount, decide who is surplus - only miners that failed to claim one are
-// recycled, so this can never take a miner away from a source that still has room for it.
+// The same reasoning covers every specialist whose demand is read off the map: a scout with no
+// room left to survey and a breacher with no wall standing between us and a source are worth
+// nothing alive either, and both were observed idling out their lifetime instead. Roles whose
+// demand swings tick to tick (hauler, builder, upgrader) stay out of this - their idleness is
+// the queue's business, not the recycler's.
+//
+// Squares, not miner headcount, decide which miner is surplus - only miners that failed to claim
+// one are recycled, so this can never take a miner away from a source that still has room for it.
+function isSurplusSpecialist(creep, room) {
+	const role = creep.memory.role;
+	if (role === 'miner') return true;
+	if (role === 'scout') return expansion.scoutDemand(room) === 0;
+	if (role === 'breacher') return !expansion.breachWorkExists(room);
+	return false;
+}
+
 function addRecycleTasks(room, tasks) {
 	const spawn = room.find(FIND_MY_SPAWNS)[0];
 	if (!spawn) return;
@@ -100,9 +114,9 @@ function addRecycleTasks(room, tasks) {
 		const creep = Game.creeps[name];
 		// A relief miner is idle on purpose - it is waiting out its predecessor's last ticks beside
 		// the source - and recycling it would undo the early spawn that put it there.
-		const idleMinerHere =
-			creep.room.name === room.name && creep.memory.role === 'miner' && !creep.memory.task && !creep.memory.standbyFor;
-		if (!idleMinerHere) continue;
+		const idle = !creep.memory.task && !creep.memory.standbyFor;
+		if (!idle || !belongsToRoom(creep, room)) continue;
+		if (!isSurplusSpecialist(creep, room)) continue;
 
 		tasks.push({
 			id: `${TASK_TYPES.RECYCLE}:${creep.name}`,
@@ -301,12 +315,21 @@ function addUpgradeTask(room, tasks) {
 	const controllerMissingOrNotMine = !controller || !controller.my;
 	if (controllerMissingOrNotMine) return;
 
-	tasks.push({
-		id: `${TASK_TYPES.UPGRADE}:${controller.id}`,
-		type: TASK_TYPES.UPGRADE,
-		priority: taskOrder.upgradePriority(controller),
-		targetId: controller.id,
-	});
+	// One task per standing spot, not one per controller: a task id is held by a single creep,
+	// so one UPGRADE task silently capped the crew at one - the second and third upgrader the
+	// population maths asked for stood idle their whole lives waiting on an id that never freed
+	// up. Slots keyed like miner squares keep each id unique, and the tile count is the same
+	// physical cap upgraderTarget already sizes the crew against.
+	const slots = mining.getAccessibleTiles(room, controller.pos).length;
+	for (let slot = 0; slot < slots; slot++) {
+		tasks.push({
+			id: `${TASK_TYPES.UPGRADE}:${controller.id}:${slot}`,
+			type: TASK_TYPES.UPGRADE,
+			priority: taskOrder.upgradePriority(controller),
+			targetId: controller.id,
+			slot,
+		});
+	}
 }
 
 function hasCapabilityForTask(creep, taskType) {
@@ -422,8 +445,19 @@ function isCreepIdle(creep) {
 	return !creep.memory.task;
 }
 
+// A creep is only ever re-tasked by a queue that considers it, and queues run per owned room. A
+// creep idle in a room nobody owns - a scout parked abroad after its survey, a breacher whose
+// wall fell mid-job - matched no queue at all, so it stood there for the rest of its life. Such
+// a creep belongs to the room that sent it: homeRoom when stamped, otherwise whichever owned
+// room is asking.
+function belongsToRoom(creep, room) {
+	if (creep.room.name === room.name) return true;
+	if (creep.memory.homeRoom) return creep.memory.homeRoom === room.name;
+	return !(creep.room.controller && creep.room.controller.my);
+}
+
 function assignTasks(room, taskQueue) {
-	const idleCreeps = _.filter(Game.creeps, creep => creep.room.name === room.name && isCreepIdle(creep));
+	const idleCreeps = _.filter(Game.creeps, creep => belongsToRoom(creep, room) && isCreepIdle(creep));
 
 	// Task lists are rebuilt fresh every tick (same id, new object), so a task already held by
 	// a non-idle creep from a previous tick would otherwise look "unclaimed" here and get

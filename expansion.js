@@ -46,6 +46,10 @@ function updateRoomIntel() {
 			// reachability rests on PathFinder work redone only every REACHABILITY_RECHECK_TICKS.
 			unreachableSources: previous.unreachableSources,
 			reachabilityAt: previous.reachabilityAt,
+			// The breach plan survives the rebuild or there is no plan: dropping it here deleted
+			// and re-derived it on every intel pass - the same 拆牆 line stamped into the event
+			// log every ten ticks was this field being forgotten and planned again.
+			breach: previous.breach,
 		};
 
 		// Any visible room bordering ours, not just active remotes: the expansion flow requires a
@@ -168,13 +172,31 @@ function planBreach(room) {
 		});
 		if (result.incomplete) continue;
 
+		const wallsOnRoute = [];
 		for (const step of result.path) {
 			const wall = walls.find(candidate => candidate.pos.x === step.x && candidate.pos.y === step.y);
-			const alreadyListed = wall && targets.some(target => target.id === wall.id);
-			if (wall && !alreadyListed) targets.push({ id: wall.id, x: wall.pos.x, y: wall.pos.y, hits: wall.hits });
+			const alreadyListed = wall && wallsOnRoute.some(listed => listed.id === wall.id);
+			if (wall && !alreadyListed) wallsOnRoute.push(wall);
+		}
+		// The path runs source→entry but the breacher works entry→source, so the only wall it
+		// can stand at is the last one the path met. Reversed, each wall in the plan becomes
+		// reachable exactly when its predecessor falls.
+		wallsOnRoute.reverse();
+		for (const wall of wallsOnRoute) {
+			const alreadyListed = targets.some(target => target.id === wall.id);
+			if (!alreadyListed) targets.push({ id: wall.id, x: wall.pos.x, y: wall.pos.y, hits: wall.hits });
 		}
 	}
-	if (targets.length === 0) return;
+	if (targets.length === 0) {
+		// Every route incomplete, or complete without a wall on it while reachability still says
+		// no route - either way the pocket stays sealed with no plan, and that contradiction must
+		// be visible rather than silent. One line per 500 ticks: this runs on every intel pass
+		// for as long as the plan is missing, and the event log holds 150 entries.
+		if (Game.time % 500 === 0) {
+			log(`[拆牆] ${room.name} 規劃失敗:${intel.unreachableSources.length} 個不可達礦源,但找不到需要拆的牆`);
+		}
+		return;
+	}
 
 	intel.breach = { targets, plannedAt: Game.time };
 	// Not a nested template literal - tools/check-references.js strips strings with a regex that
@@ -400,23 +422,43 @@ function countCreepsAssignedTo(targetId) {
 	return _.filter(Game.creeps, creep => creep.memory.task && creep.memory.task.targetId === targetId).length;
 }
 
-function getExpansionSpawnRequests(homeRoom, myUsername) {
-	const requests = [];
-	if (!config.EXPANSION_ENABLED) return requests;
-
-	// One scout per unscouted room is the natural ceiling here - spawning more than that would
-	// just leave extras with nowhere new to explore, so the count comes from the map, not a knob.
-	// Rooms waiting on a breach plan count too: the plan needs vision, vision needs a body in the
-	// room, and a room already surveyed once would otherwise never earn a second look.
+// One scout per unscouted room is the natural ceiling - spawning more than that would just
+// leave extras with nowhere new to explore, so the count comes from the map, not a knob. Rooms
+// waiting on a breach plan count too: the plan needs vision, vision needs a body in the room,
+// and a room already surveyed once would otherwise never earn a second look. Shared with the
+// recycler, which reads "the map demands zero scouts" off the same figure.
+function scoutDemand(homeRoom) {
 	const breachVisionRooms = getAdjacentRoomNames(homeRoom.name).filter(roomName => {
 		const intel = Memory.rooms[roomName];
 		return intel && (intel.unreachableSources || []).length > 0 && !intel.breach &&
 			!intel.owner && !(intel.hostileCount > 0) && !Game.rooms[roomName];
 	}).length;
-	const unscoutedCount = getUnscoutedAdjacent(homeRoom.name).length;
-	const needsScout = countCreepsWithRole('scout') < unscoutedCount + breachVisionRooms;
+	return getUnscoutedAdjacent(homeRoom.name).length + breachVisionRooms;
+}
+
+// Whether any bordering room still has breach work: a plan with walls standing, or a sealed
+// pocket awaiting one. Wider than the spawn condition on purpose - the recycler uses this, and
+// a breacher recycled in the gap between one plan falling and the next being derived would be
+// re-spawned at full cost a few ticks later.
+function breachWorkExists(homeRoom) {
+	return getAdjacentRoomNames(homeRoom.name).some(roomName => {
+		const intel = Memory.rooms[roomName];
+		if (!intel || intel.owner || intel.hostileCount > 0) return false;
+		const planned = intel.breach && intel.breach.targets.length > 0;
+		const awaitingPlan = (intel.unreachableSources || []).length > 0;
+		return planned || awaitingPlan;
+	});
+}
+
+function getExpansionSpawnRequests(homeRoom, myUsername) {
+	const requests = [];
+	if (!config.EXPANSION_ENABLED) return requests;
+
+	const needsScout = countCreepsWithRole('scout') < scoutDemand(homeRoom);
 	if (needsScout) {
-		requests.push({ role: 'scout', priority: spawnOrder.spawnPriority('scout'), body: creepBodies.bodyFor('scout', homeRoom.energyCapacityAvailable), memory: { role: 'scout' } });
+		// homeRoom stamped so an idle scout parked in a foreign room still belongs to the queue
+		// that sent it - without it the creep matches no room's queue and can never be re-tasked.
+		requests.push({ role: 'scout', priority: spawnOrder.spawnPriority('scout'), body: creepBodies.bodyFor('scout', homeRoom.energyCapacityAvailable), memory: { role: 'scout', homeRoom: homeRoom.name } });
 	}
 
 	// One breacher while any bordering room has a breach planned. Builders stay on their sites;
@@ -480,4 +522,4 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 	return requests;
 }
 
-module.exports = { runExpansion, getExpansionSpawnRequests, updateRoomIntel };
+module.exports = { runExpansion, getExpansionSpawnRequests, updateRoomIntel, scoutDemand, breachWorkExists };

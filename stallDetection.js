@@ -40,6 +40,16 @@ function isStalled(creep) {
 	if (!task) return false;
 	if (EXCLUDED_FROM_STALL_CHECK.has(task.type)) return false;
 
+	// A dismantler parked beside its wall is mid-job, not wedged: an 881k-hit wall keeps the
+	// creep on the same square for thousands of ticks, which is exactly the signature the
+	// position check reads as a stall - and stripping the task here is what left the wall
+	// standing. Standing in reach of the target is the proof of progress; a dismantler stuck
+	// en route stays eligible.
+	if (task.type === TASK_TYPES.DISMANTLE) {
+		const target = Game.getObjectById(task.targetId);
+		if (target && creep.pos.isNearTo(target)) return false;
+	}
+
 	const taskStuck = Game.time - creep.memory.taskStartTick > config.STALL_TASK_TICKS;
 	const positionStuck = Game.time - (creep.memory.posUnchangedSince || Game.time) > config.STALL_POSITION_TICKS;
 	return taskStuck && positionStuck;
