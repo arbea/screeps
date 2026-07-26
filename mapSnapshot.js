@@ -41,8 +41,17 @@ const STRUCTURE_SCAN_INTERVAL = 50;
 
 function structuresFor(room) {
 	const published = Memory.mapSnapshot[room.name];
-	const stale = !published || !published.structures || Game.time - published.structuresScannedAt >= STRUCTURE_SCAN_INTERVAL;
-	if (!stale) return { structures: published.structures, structuresScannedAt: published.structuresScannedAt };
+	const scannedAt = published && published.structuresScannedAt;
+
+	// A missing timestamp has to count as stale, and the reason is arithmetic: a snapshot written
+	// by the version before this field existed carries structures but no stamp, and
+	// `Game.time - undefined` is NaN - which is not >= anything, so the entry read as fresh, got
+	// republished with its timestamp still missing, and froze that way permanently. The structure
+	// list stopped updating the moment this cache shipped: the dashboard went on reporting 76
+	// relic walls the bot had already destroyed, because the count came from a snapshot that
+	// could no longer be replaced.
+	const stale = !published || !published.structures || scannedAt === undefined || Game.time - scannedAt >= STRUCTURE_SCAN_INTERVAL;
+	if (!stale) return { structures: published.structures, structuresScannedAt: scannedAt };
 
 	return { structures: structuresByType(room), structuresScannedAt: Game.time };
 }

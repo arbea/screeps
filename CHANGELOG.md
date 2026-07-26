@@ -88,3 +88,4 @@ changes are recorded only here.
 - Cache the room's structure cost matrix instead of rebuilding it from a full structure scan on every path search, invalidated on the construction-site count and every 50 ticks.
 - Make loose energy, tombstones, and ruins their own task type instead of only a supply for haulers already carrying a delivery - a pile with no sink to feed used to sit there evaporating.
 - Narrow the AI usage band to 80-90% (was 85-95%).
+- Treat a missing structure-scan timestamp as stale: `Game.time - undefined` is NaN, which is not >= anything, so the structure cache read as fresh forever and the map snapshot froze the day it shipped - the 76 relic walls the dashboard kept reporting were a snapshot the bot could no longer replace.
