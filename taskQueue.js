@@ -266,8 +266,14 @@ function getRepairTargetIds(room) {
 	const stale = !cache || Game.time - cache.lastScan >= config.REPAIR_SCAN_INTERVAL;
 	if (!stale) return cache.ids;
 
+	// Walls are excluded because the threshold cannot say anything about them: a wall's hitsMax is
+	// 300M, so every wall ever built sits below any fraction of it forever - 76 of them were each
+	// holding a permanent task here. And unlike roads or containers a wall does not decay; raising
+	// its hits is fortification, a strategy with no policy yet, not upkeep.
 	const structures = room.find(FIND_STRUCTURES, {
-		filter: structure => structure.hits < structure.hitsMax * config.REPAIR_HP_THRESHOLD,
+		filter: structure =>
+			structure.structureType !== STRUCTURE_WALL &&
+			structure.hits < structure.hitsMax * config.REPAIR_HP_THRESHOLD,
 	});
 	Memory.repairCache[room.name] = { lastScan: Game.time, ids: structures.map(structure => structure.id) };
 	return Memory.repairCache[room.name].ids;

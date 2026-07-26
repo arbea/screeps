@@ -39,3 +39,9 @@ changes are recorded only here.
 - Fix a ReferenceError that had stopped the room spawning entirely since the upgrader change.
 - Add tools/check-references.js, which finds the undefined-name bugs node -c cannot see.
 - Let the reported usage percentage anchor the estimate, since the official page needs a login.
+- Back off for as long as a Screeps refusal asks, instead of retrying into the same wall every 90s.
+- Stop queueing a repair task per wall - walls never decay, and 76 of them held a permanent task each.
+- Show the conquest goal's real path: a reserver for an empty room, and no step hardcoded undone.
+- Read the owner from our own intel's shape too, which had E48S29 (held by parnell) down as unowned.
+- Add /api/autonomy so the watcher can glance at the tier without spending a Screeps call.
+- Build tools/watch-dash.js, the wake-up watcher the handbook described but nobody had written.
