@@ -134,7 +134,7 @@ function addScoutTasks(homeRoom, tasks) {
 	}
 }
 
-function addRemoteTasks(myUsername, tasks) {
+function addRemoteTasks(homeRoom, myUsername, tasks) {
 	for (const roomName of Memory.remoteRooms || []) {
 		const intel = Memory.rooms[roomName];
 		if (!intel) continue;
@@ -148,7 +148,11 @@ function addRemoteTasks(myUsername, tasks) {
 			});
 		}
 
-		const needsReservation = intel.controllerId && intel.reservedBy !== myUsername;
+		// A reserver is CLAIM+MOVE and nothing smaller exists, so below its cost the room cannot
+		// field one at any size. Emitting the task anyway put an impossible job at priority 80 that
+		// sat unassigned for sixteen thousand ticks, outranking work that could actually be done.
+		const canFieldAReserver = creepBodies.bodyFor('reserver', homeRoom.energyCapacityAvailable) !== null;
+		const needsReservation = intel.controllerId && intel.reservedBy !== myUsername && canFieldAReserver;
 		if (needsReservation) {
 			tasks.push({
 				id: `${TASK_TYPES.RESERVE_CONTROLLER}:${roomName}`,
@@ -182,7 +186,7 @@ function runExpansion(homeRoom) {
 	const myUsername = homeRoom.controller.owner.username;
 	const tasks = [];
 	addScoutTasks(homeRoom, tasks);
-	addRemoteTasks(myUsername, tasks);
+	addRemoteTasks(homeRoom, myUsername, tasks);
 	return tasks;
 }
 
