@@ -16,6 +16,20 @@ function runHarvest(creep, source) {
 	const full = creep.store.getFreeCapacity() === 0;
 	if (full) return true;
 
+	// A pile beside the source fills the creep in one tick where mining it takes 25, and the
+	// energy on the ground is decaying while the source's is not - so whenever there's a pile
+	// to take, taking it beats mining on both counts.
+	const pile = source.pos.findInRange(FIND_DROPPED_RESOURCES, 2)[0];
+	if (pile) {
+		const atPile = creep.pos.isNearTo(pile);
+		if (!atPile) {
+			creep.moveTo(pile);
+			return false;
+		}
+		creep.pickup(pile);
+		return false;
+	}
+
 	const inRange = creep.pos.isNearTo(source);
 	if (!inRange) {
 		creep.moveTo(source);

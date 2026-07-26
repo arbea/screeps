@@ -52,7 +52,24 @@ function maxMinersForSource(room, source) {
 function fallbackHarvestSlotsForSource(room, source) {
 	const maxMiners = maxMinersForSource(room, source);
 	const accessibleTileCount = getAccessibleTiles(room, source.pos).length;
-	return Math.max(0, accessibleTileCount - maxMiners);
+	const sourceSlots = Math.max(0, accessibleTileCount - maxMiners);
+
+	// Energy already lying on the ground is a far wider doorway into the economy than the few
+	// tiles left free around the source: a creep empties a pile in a single tick from any walkable
+	// tile beside it, rather than mining at 2 energy/tick, and every load carried off is a load
+	// that stops decaying. Sized the same way haul slots are - by what is actually piled up -
+	// and capped by the tiles that can physically reach it. Taken as a max rather than a sum
+	// because the piles sit next to the source, so the two tile sets largely overlap.
+	const piles = source.pos.findInRange(FIND_DROPPED_RESOURCES, 2);
+	const pileAmount = piles.reduce((sum, pile) => sum + pile.amount, 0);
+
+	const pileTiles = new Set();
+	for (const pile of piles) {
+		for (const tile of getAccessibleTiles(room, pile.pos)) pileTiles.add(`${tile.x},${tile.y}`);
+	}
+	const pileSlots = Math.min(pileTiles.size, Math.ceil(pileAmount / HAULER_CAPACITY_ESTIMATE));
+
+	return Math.max(sourceSlots, pileSlots);
 }
 
 const HAULER_CAPACITY_ESTIMATE = 50; // conservative baseline; matches the default generalist body

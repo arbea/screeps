@@ -309,8 +309,12 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.DEFENSE || taskType === TASK_TYPES.REMOTE_DEFENSE) {
 		return partTypes.includes(ATTACK) || partTypes.includes(RANGED_ATTACK);
 	}
+	// CARRY as well as WORK: the point of the fallback harvest is to come away holding energy to
+	// spend on BUILD/REPAIR/UPGRADE. A miner has WORK but no carry capacity at all, so runHarvest
+	// reads it as instantly full and reports the task done every tick - it churns tasks forever
+	// without ever gathering anything.
 	if (taskType === TASK_TYPES.HARVEST) {
-		return partTypes.includes(WORK);
+		return partTypes.includes(WORK) && partTypes.includes(CARRY);
 	}
 	// Unlike HARVEST, this must stay restricted to the 'remoteHarvester' role: that's the only
 	// body built with CARRY parts (creepBodies.buildRemoteHarvesterBody) and homeRoom memory
