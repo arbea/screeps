@@ -80,3 +80,4 @@ changes are recorded only here.
 - Account for every energy flow (energyLedger.js): income at the source's own drain, spending at the intent that spends it, waste at the moment it becomes unrecoverable - regen leftovers, ground decay, cargo dying with its creep, downgrade ticks.
 - Judge T3 as total waste over total production against the same 5%/10% marks, and draw the account as two donut charts - income and spend, waste as one red slice with its breakdown in labeled rows beneath.
 - Restate T4 as idle-to-lifetime share: every non-combat creep's accumulated idle ticks over its lived ticks, fleet-weighted, under 5% good and above it flagged for analysis - with the five worst creeps listed on the card, over-mark rows marked.
+- Re-align the traffic tables with the official docs: code is 240/day (POST, the verb we use), money-history's path was wrong, room-objects is undocumented and now carries a cap anyway; segment and code self-caps sized to the stricter verb.
