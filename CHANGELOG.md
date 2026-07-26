@@ -89,3 +89,4 @@ changes are recorded only here.
 - Make loose energy, tombstones, and ruins their own task type instead of only a supply for haulers already carrying a delivery - a pile with no sink to feed used to sit there evaporating.
 - Narrow the AI usage band to 80-90% (was 85-95%).
 - Treat a missing structure-scan timestamp as stale: `Game.time - undefined` is NaN, which is not >= anything, so the structure cache read as fresh forever and the map snapshot froze the day it shipped - the 76 relic walls the dashboard kept reporting were a snapshot the bot could no longer replace.
+- Anchor the usage gauge to the last official reading instead of dividing local spend by the calibrated ceiling: the differential ceiling is a slope, and using it alone assumed the usage this machine cannot see was zero, which read 19% against an account page saying 48%.
