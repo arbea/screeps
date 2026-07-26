@@ -17,7 +17,7 @@ function publishMapSnapshot(room) {
 		spawns: room.find(FIND_MY_SPAWNS).map(toPoint),
 		controller: room.controller ? toPoint(room.controller) : null,
 		constructionSites: room.find(FIND_MY_CONSTRUCTION_SITES).map(toPoint),
-		hostiles: hostiles.findHostileCreeps(room).map(toPoint),
+		hostiles: hostiles.findThreateningCreeps(room).map(toPoint),
 		creeps: room.find(FIND_MY_CREEPS).map(creep => {
 			const task = creep.memory.task;
 			const target = task ? Game.getObjectById(task.targetId) : null;

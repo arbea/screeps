@@ -123,7 +123,7 @@ function buildPriority(room, structureType, underAttack) {
 // now and why, so the order is visible without being editable.
 function describeBuildOrder(room) {
 	const needs = getCachedNeeds(room);
-	const underAttack = hostiles.findHostileCreeps(room).length > 0;
+	const underAttack = hostiles.findThreateningCreeps(room).length > 0;
 	const level = room.controller.level;
 
 	return RANKED_TYPES.map(structureType => {

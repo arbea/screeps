@@ -247,7 +247,7 @@ function countCreepsAssignedTo(targetId, taskType) {
 }
 
 function addBuildTasks(room, tasks) {
-	const underAttack = hostiles.findHostileCreeps(room).length > 0;
+	const underAttack = hostiles.findThreateningCreeps(room).length > 0;
 
 	for (const site of room.find(FIND_MY_CONSTRUCTION_SITES)) {
 		tasks.push({

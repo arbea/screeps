@@ -11,11 +11,12 @@ const THREAT_WEIGHTS = {
 	[TOUGH]: 1,
 };
 
-// Allied creeps never reach here - findHostileCreeps filters the trust circle out first - so an
-// ally moving a war squad through our room can't raise the alarm.
+// Threat, not targeting: the RCL8 neighbours we refuse to shoot at still count here, so a siege by
+// one still raises DEFCON and can reach safemode. Allies are filtered out either way, so one moving
+// a war squad through our room cannot raise the alarm.
 function threatScore(room) {
 	let score = 0;
-	for (const creep of hostiles.findHostileCreeps(room)) {
+	for (const creep of hostiles.findThreateningCreeps(room)) {
 		for (const part of creep.body) score += THREAT_WEIGHTS[part.type] || 0;
 	}
 	return score;
@@ -30,7 +31,7 @@ function spawnCritical(room) {
 }
 
 function level(room) {
-	const enemies = hostiles.findHostileCreeps(room);
+	const enemies = hostiles.findThreateningCreeps(room);
 	if (enemies.length === 0) return LEVELS.NORMAL;
 
 	if (spawnCritical(room)) return LEVELS.CRITICAL;

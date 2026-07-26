@@ -5,6 +5,12 @@ const DEFAULTS = {
 	// player enforces their own list, and auto-merging one would let any listed name add more.
 	ALLIES: ['douasin', 'arbea'],
 
+	// Players we never shoot at, without being allies. All four are RCL8 neighbours; the theatre
+	// assessment is that staying invisible to them is worth more than any exchange we could win,
+	// and that a single stray shot at a passing unit is enough to invite one we cannot survive.
+	// They still count toward DEFCON - we notice the danger and can safemode, we just don't fire.
+	NON_AGGRESSION: ['keqing', 'rmuchan', 'Petrichor', 'backslash'],
+
 	REPAIR_HP_THRESHOLD: 0.8,
 	AUTO_BUILD_CONTAINERS: true,
 	AUTO_BUILD_ROADS: true,

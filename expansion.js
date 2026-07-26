@@ -37,7 +37,7 @@ function updateRoomIntel() {
 			controllerId: room.controller ? room.controller.id : null,
 			owner: room.controller && room.controller.owner ? room.controller.owner.username : null,
 			reservedBy: room.controller && room.controller.reservation ? room.controller.reservation.username : null,
-			hostileCount: hostiles.findHostileCreeps(room).length,
+			hostileCount: hostiles.findThreateningCreeps(room).length,
 			towers: towers.length,
 			towerEnergy: towers.reduce((sum, tower) => sum + (tower.store ? tower.store[RESOURCE_ENERGY] : 0), 0),
 			spawns: room.find(FIND_HOSTILE_SPAWNS).length,
