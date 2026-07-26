@@ -40,11 +40,41 @@ function recordCall(endpoint, status) {
 	});
 }
 
+// Asks the dashboard whether the endpoint still has room under the self-imposed caps before
+// spending a real call. The caps exist because the official limits already lied once - two 429s
+// in a day at rates far below the published figures - and the ledger both consumers share lives
+// in the dashboard. If the dashboard is down there is nothing to ask; proceed, but say so.
+function checkAllowance(endpoint) {
+	return new Promise(resolve => {
+		const req = http.request(
+			{ ...DASHBOARD, path: '/api/traffic/allowance?endpoint=' + encodeURIComponent(endpoint), method: 'GET' },
+			res => {
+				let raw = '';
+				res.on('data', chunk => (raw += chunk));
+				res.on('end', () => {
+					try { resolve(JSON.parse(raw)); } catch (err) { resolve(null); }
+				});
+			}
+		);
+		req.on('error', () => {
+			console.error('[無帳本] dashboard 沒開,無法查自我上限 —— 這次呼叫未經配額檢查。');
+			resolve(null);
+		});
+		req.end();
+	});
+}
+
 async function main() {
 	const [method, apiPath, payload] = process.argv.slice(2);
 	if (!method || !apiPath) {
 		console.error('用法: node tools/screeps-call.js <METHOD> <path> [json body]');
 		process.exit(2);
+	}
+
+	const allowance = await checkAllowance(apiPath.split('?')[0]);
+	if (allowance && !allowance.allowed) {
+		console.error(`自我上限已到,${Math.ceil(allowance.retryAfterMs / 1000)} 秒後再試 —— 沒有打到 Screeps。`);
+		process.exit(3);
 	}
 
 	const token = readToken();

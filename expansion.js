@@ -48,8 +48,15 @@ function updateRoomIntel() {
 			reachabilityAt: previous.reachabilityAt,
 		};
 
-		const isRemoteRoom = (Memory.remoteRooms || []).includes(roomName);
-		if (isRemoteRoom) updateSourceReachability(room);
+		// Any visible room bordering ours, not just active remotes: the expansion flow requires a
+		// proven route before anything else, and a room dropped for having none must be re-tested
+		// the next time somebody stands in it - that is how a wall breach turns back into mining.
+		const exits = Object.values(Game.map.describeExits(roomName) || {});
+		const bordersOurs = exits.some(name => {
+			const neighbour = Game.rooms[name];
+			return neighbour && neighbour.controller && neighbour.controller.my;
+		});
+		if (bordersOurs) updateSourceReachability(room);
 	}
 }
 

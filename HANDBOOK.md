@@ -48,6 +48,7 @@
 - **終端機這邊的呼叫一律走 `node tools/screeps-call.js <METHOD> <path> [json]`**,它會呼叫 Screeps 並把這次呼叫記進帳本。直接用 `https.request` 打 screeps.com 的話,計量器看不到——而當初打爆額度的正是終端機這邊,一個看不到最大消費者的計量器等於沒有。
 - **Screeps 的回應不帶任何 `X-RateLimit-*` 標頭**(實測確認過,不是假設)。所以剩餘額度是本機對照官方公布上限累計出來的,不是帳號回報值。
 - **`/api/user/memory` 有低於「1440/天」的短窗限制**(2026-07-26 第二次 429 實證:retry-after 約 48 分,當時全天讀取遠低於 1440)。肇因是我的診斷模式:一小時內十幾輪「console 寫 __diag + memory 讀回」再加上重啟後的輪詢。**診斷讀回要合併與配給**——能等 dashboard 下一輪輪詢就等(整棵 Memory 都會帶回來,__diag 也在裡面),直接 GET memory 一小時最多個位數次。另:429 的 retry-after 數值偏保守,實際恢復更快,但不要以此為由去試。
+- **自我上限已機制化**(server.js `SELF_CAPS`):memory 30/時、console 60/時、segment 60/時、terrain 30/時、code 20/時、全域 60/分——都遠低於官方值,留一半以上餘裕。達到上限時**在本地拒絕**、回覆與真 429 同格式(retry-after),退避機制照常接手,帳號一毛不花、也不計入「被拒」指標。終端的 `screeps-call.js` 呼叫前會先問 `/api/traffic/allowance`,兩個消費者共用同一本帳。terrain 已落盤永久快取(`terrain-cache.json`),重啟不再重抓。
 
 ---
 

@@ -58,3 +58,7 @@ changes are recorded only here.
 - Draw a glyph on every point structure and map marker, creep-bubble style, so a phone can tell a tower from an extension.
 - Keep every goal card alive across data loss, and split one-time missions from metrics that never close.
 - Adopt the ally's fixed append flow - one sectioned call per ledger entry, verified or retried.
+- Enforce self-imposed per-endpoint caps locally, refusing with a retry-after before a request ever leaves the machine.
+- Let the terminal ask the dashboard for allowance before spending a call, so both consumers obey one ledger.
+- Keep terrain on disk - restarts were re-buying rock that cannot move.
+- Require a proven route as an explicit step in every expansion mission, tested from our entry inside the room.
