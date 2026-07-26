@@ -77,6 +77,18 @@ function defenseRequests() {
 		.map(report => ({ type: 'defense', room: report.name, note: `DEFCON ${report.defcon}` }));
 }
 
+// Requests that aren't triggered by game state - asking an ally something - are queued into
+// Memory rather than written into this file, so posing a new question is a console line instead of
+// a code change and a deploy. Drained when sent: the protocol answers with an ack, so a request
+// left in the queue would be re-asked every cycle.
+function drainOutbox() {
+	if (!Memory.ally) Memory.ally = {};
+
+	const queued = Memory.ally.outbox || [];
+	Memory.ally.outbox = [];
+	return queued;
+}
+
 function buildMessage() {
 	if (!Memory.ally) Memory.ally = {};
 
@@ -89,7 +101,7 @@ function buildMessage() {
 		rooms: ownedRoomReports(),
 		war: Memory.war || { target: null, phase: null },
 		intel: shareableIntel(),
-		requests: defenseRequests(),
+		requests: [...defenseRequests(), ...drainOutbox()],
 		// Acknowledgements owed from messages read since we last spoke. Sending them clears the
 		// debt; an ally reading its own tick back knows the request was seen, not that it was
 		// obeyed - the protocol requires an answer, not compliance.
