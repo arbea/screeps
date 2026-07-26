@@ -72,6 +72,7 @@ function publishMapSnapshot(room) {
 				taskType: task ? task.type : null,
 				targetPos: target ? toPoint(target) : null,
 				taskStartTick: creep.memory.taskStartTick || null,
+				idleTicks: creep.memory.idleSince === undefined ? 0 : Game.time - creep.memory.idleSince,
 				energy: creep.store[RESOURCE_ENERGY],
 				energyCapacity: creep.store.getCapacity(RESOURCE_ENERGY),
 				hits: creep.hits,

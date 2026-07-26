@@ -117,6 +117,8 @@
 - 一則訊息不要太長:Screeps 的 console expression 有大小上限,太長會被拒(`expression size is too large`)。一則講一個主題,300 字元上下是安全的。
 - **中文訊息不要用 curl 從 Git Bash 送**——編碼會在 shell 層爛掉,曾把 3 則亂碼排進 outbox(已清掉重送)。要送非 ASCII 內容,寫一個 UTF-8 的 Node 腳本去 POST `/api/ally/say`。
 - 對方的操作文件(2026-07-26 分享)要求:每小時在對帳頁記錄戰況(時間戳/帳號/RCL/DEFCON/戰爭階段/預測/異常)。已由 dashboard 自動化:server 每小時寫 `recon-log.json`,啟動時先寫一筆,`/api/recon` 供頁面讀,不花輪詢。
+- **共享對帳頁**(douasin 主機上的「Screeps/盟軍對帳」):每小時的紀錄也會經 MCP 寫進去,走文件規定的值哨流程(read_page → 插進「## arbea 側」第一行 → write_page 全文寫回,回覆要含 `OK ... verified`)。接入 URL 在 `.env` 的 `ALLY_MCP_URL`,唯一備份在記憶 `ally-ledger-access`——**頁上明文會被對方移除,別弄丟**。跨重啟有 50 分鐘節流。**live schema 與文件不符**:read_page 收 `path`、append_page 收 `path`+`text`、write_page 收 `path`+`content`;append_page 只會落頁尾(已報 bug)。
+- **中文送出一律走 UTF-8 的 Node 腳本**,curl 經 Git Bash 會把編碼弄爛(已發生過一次,3 則亂碼清掉重送)。
 
 ---
 
@@ -131,4 +133,7 @@ E47S29,RCL 2。extension 5/5 已達上限——**這一級沒有任何建築能�
 - **E48S29 由 parnell 持有,房內 4 個敵方單位**。舊 bug(只讀盟友情報的 owner 形狀,不讀自家的)讓目標頁一直顯示「無主」。「佔領右側礦場」實際上是對有主房間開戰——RCL2 零戰力做不到,也不該由我單方面決定開打。這個目標先擱置,卡在哪一步儀表板現在照實顯示。
 - **(45,7) 虧損已破案,兩個原因**:①繞人重算的路徑忘了把建築設成障礙,一條穿過 extension 的路讓礦工 349 tick 走不出家門(movement.js 已修);②應急 1W 礦工佔著唯一礦位,挖 2/tick 對重生 10/tick。它 ttl 到 ~81803000 自然死亡後會補 5W 正規體型——下次巡檢確認替補的 WORK 數。注意 `strategySnapshot` 的 `currentMiners` 只數頭數不數 WORK,體型不足在儀表板上看不出來。
 
-已解決、留個座標:REPAIR 任務從 108 → 32——牆不會衰減,永遠低於 80% 門檻是因為 hitsMax 是 3 億,已把牆排除在維修掃描外(taskQueue.js getRepairTargetIds)。剩下的 32 筆是路和容器的正當衰減維護。
+- **E47S28 的 117 面遺跡牆堵住 (27,20) 礦源的入口**:remoteHarvester 被迫繞 190 步(出房再從別的入口進),一趟 ~600 tick 搬 50 能量,不經濟。無主房不能 destroy(),要嘛派 WORK creep 拆出通道(DISMANTLE 任務還沒有),要嘛先降低該源優先度。另一顆 (39,35) 不受影響。
+- **閒置目標(第 4)已上線**:idleStats.js 每 tick 記非戰鬥 creep 的無任務時間(defender 系除外),300-tick 滾動窗口;快照帶 `idleTicks`,目標頁顯示最長閒置與窗口比例,上限 10 秒(約 3 tick)。第一筆讀數就抓到 upgrader 閒置 18 tick——值得追。
+
+已解決、留個座標:REPAIR 任務從 108 → 32——牆不會衰減,永遠低於 80% 門檻是因為 hitsMax 是 3 億,已把牆排除在維修掃描外(taskQueue.js getRepairTargetIds)。剩下的 32 筆是路和容器的正當衰減維護。E47S29 的 76 面遺跡牆已由 `clearRelicWalls`(taskQueue.js,50 tick 一掃)全數 destroy(),實測 76 → 0;新房間入手後同一機制自動生效。

@@ -48,3 +48,7 @@ changes are recorded only here.
 - Give a stuck creep's detour path the same walls the straight one respects; a miner spent 349 ticks two tiles from home for want of them.
 - Number the goal cards by stated priority: AI usage, API restraint, source loss, controller, conquest.
 - Record an hourly battle-status entry on the reconciliation page, in the format the ally's document specifies.
+- Destroy relic walls in owned rooms from the bot itself - destroy() needs no creep, and 76 of them were pathing obstacles that never decay.
+- Track how long each non-combat creep stands idle, and hold it under ten seconds as goal 4.
+- Mirror the hourly entry into the ally's shared ledger by that page's own sentry flow, throttled so restarts don't stamp extra lines.
+- Stop the watcher waking on ally ack churn - a read receipt appears one cycle and clears the next.

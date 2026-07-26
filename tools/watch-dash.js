@@ -50,6 +50,8 @@ function saveState(state) {
 
 // Only the fields where a change means somebody should read the message again. tick advances every
 // broadcast and intel timestamps churn constantly; waking on those would fire every 20 game ticks.
+// ack is out too - it is a read receipt that appears for one cycle and clears on the next, and
+// including it had the watcher waking twice per acknowledged message with nothing to act on.
 function allyDigest(message) {
 	if (!message) return null;
 	return JSON.stringify({
@@ -57,7 +59,6 @@ function allyDigest(message) {
 		rooms: message.rooms,
 		war: message.war,
 		requests: message.requests,
-		ack: message.ack,
 	});
 }
 

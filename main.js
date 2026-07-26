@@ -12,6 +12,7 @@ const expansion = require('./expansion');
 const ally = require('./ally');
 const traffic = require('./traffic');
 const sourceLoss = require('./sourceLoss');
+const idleStats = require('./idleStats');
 
 function cleanDeadCreepMemory() {
 	for (const name in Memory.creeps) {
@@ -85,6 +86,10 @@ function runCreeps() {
 	for (const name in Game.creeps) {
 		creepActions.runCreep(Game.creeps[name]);
 	}
+
+	// After every creep has had its turn to pick up work, so a creep counted idle here was idle
+	// with the whole queue already dealt - not merely early in the tick.
+	idleStats.trackIdle();
 }
 
 // Registered in the order the spec fixes. empire and war are not built yet, so their slots are

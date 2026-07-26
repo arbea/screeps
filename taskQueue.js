@@ -245,6 +245,20 @@ function addBuildTasks(room, tasks) {
 	}
 }
 
+// Walls in an owned room are always a previous occupant's leftovers - nothing here builds one -
+// and unlike relic roads they never decay, so they sit as pathing obstacles forever. destroy()
+// needs no creep and is how an owner clears them; the few hundred energy a dismantle crew could
+// recover is not worth the WORK-ticks. Runs on the repair scan's cadence because both walk the
+// same structure list; destroy() fails closed (the game refuses it while hostiles are present).
+function clearRelicWalls(room) {
+	const isScanTick = Game.time % config.REPAIR_SCAN_INTERVAL === 0;
+	if (!isScanTick) return;
+
+	for (const wall of room.find(FIND_STRUCTURES, { filter: structure => structure.structureType === STRUCTURE_WALL })) {
+		wall.destroy();
+	}
+}
+
 function addRepairTasks(room, tasks) {
 	for (const structureId of getRepairTargetIds(room)) {
 		tasks.push({
@@ -469,6 +483,8 @@ function publishSnapshot(room, taskQueue) {
 }
 
 function runTaskQueue(room) {
+	clearRelicWalls(room);
+
 	const taskQueue = buildTaskQueue(room);
 	updateBacklog(taskQueue);
 	assignTasks(room, taskQueue);
