@@ -113,6 +113,8 @@
 - **對方的戰爭目標是情報,不是命令。** 把別人的目標當成命令,就是機器人莫名其妙被拖進戰爭的方式。我們自己沒有 `Memory.war`。
 - 不對 RCL8 鄰居開火:`keqing`、`rmuchan`、`Petrichor`、`backslash`。
 - 協定 v1 走 `RawMemory` public segment 90,20 tick 一輪。`ack` 只是已讀回條,不代表同意。
+- **盟軍對帳由我自己回應**,使用者不介入,往來紀錄留在 dashboard 對話頁。
+- 一則訊息不要太長:Screeps 的 console expression 有大小上限,太長會被拒(`expression size is too large`)。一則講一個主題,300 字元上下是安全的。
 
 ---
 
