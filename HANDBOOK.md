@@ -142,6 +142,7 @@ E47S29,RCL 2。extension 5/5 已達上限——**這一級沒有任何建築能�
 - **(45,7) 虧損已破案,兩個原因**:①繞人重算的路徑忘了把建築設成障礙,一條穿過 extension 的路讓礦工 349 tick 走不出家門(movement.js 已修);②應急 1W 礦工佔著唯一礦位,挖 2/tick 對重生 10/tick。它 ttl 到 ~81803000 自然死亡後會補 5W 正規體型——下次巡檢確認替補的 WORK 數。注意 `strategySnapshot` 的 `currentMiners` 只數頭數不數 WORK,體型不足在儀表板上看不出來。
 
 - **E47S28 自我方邊界整條被遺跡牆封死**(決定性測試:限制兩房內,從家 spawn 到兩顆源的路都在邊界牆前中斷)。所以:兩顆源都標記 unreachable(expansion.js 每 500 tick 以「入口格→源、maxRooms:1」重測)、外礦自動暫停、scoreRoom 只數可達源(房間會自動退出 remoteRooms)、**佔領目標實際卡在打通圍牆**——reserver 也進不去。要重啟外礦得先派 WORK creep 拆出通道(DISMANTLE 任務類型還不存在)。兩隻困住的 remoteHarvester 已轉 generalist。
+- **基地目標(第 5)= 基地升級進度**:controller 等級/進度/速率+實際時間 ETA、降級時鐘(<80% 黃)、安全模式、power、完整建築上限表(含下級解鎖與未解鎖路線圖)、遺跡牆殘餘。布局由 LLM 記錄於 LAYOUT.md,不寫程式。
 - **閒置目標(第 4)= 非戰鬥 creep 閒置生命週期比**:idleStats.js 每 tick 記無任務時間(defender 系除外),累計進 `idleTotal`;快照帶 `idleTotal`/`lived`。判定:每隻 creep 累計閒置 tick ÷ 已存活 tick,全隊以存活 tick 加權 <5% 良好、以上需分析調整;卡片列佔比最高前 5 名,超標者標「需分析」。300-tick 窗口佔比留作短期趨勢。
 
 已解決、留個座標:REPAIR 任務從 108 → 32——牆不會衰減,永遠低於 80% 門檻是因為 hitsMax 是 3 億,已把牆排除在維修掃描外(taskQueue.js getRepairTargetIds)。剩下的 32 筆是路和容器的正當衰減維護。E47S29 的 76 面遺跡牆已由 `clearRelicWalls`(taskQueue.js,50 tick 一掃)全數 destroy(),實測 76 → 0;新房間入手後同一機制自動生效。

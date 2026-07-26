@@ -81,3 +81,5 @@ changes are recorded only here.
 - Judge T3 as total waste over total production against the same 5%/10% marks, and draw the account as two donut charts - income and spend, waste as one red slice with its breakdown in labeled rows beneath.
 - Restate T4 as idle-to-lifetime share: every non-combat creep's accumulated idle ticks over its lived ticks, fleet-weighted, under 5% good and above it flagged for analysis - with the five worst creeps listed on the card, over-mark rows marked.
 - Re-align the traffic tables with the official docs: code is 240/day (POST, the verb we use), money-history's path was wrong, room-objects is undocumented and now carries a cap anyway; segment and code self-caps sized to the stricter verb.
+- Grow T5 into base-development progress: downgrade clock, safemode, power flag, the full build table with next-level unlocks and the not-yet roadmap, relic-wall backlog, and the upgrade ETA in wall-clock time.
+- Start LAYOUT.md - the LLM-curated bunker blueprint record; the layout is deliberately not a bot module, positions get built only once written down and dated there.
