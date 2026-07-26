@@ -75,6 +75,9 @@ function logDone(creep, task, target) {
 const SPAWN_ROLE_LABELS = {
 	defender: '戰鬥兵',
 	miner: '礦工',
+	hauler: '搬運兵',
+	builder: '建造兵',
+	upgrader: '升級兵',
 	scout: '偵查兵',
 	reserver: '佔領兵',
 	remoteHarvester: '遠程採礦兵',
@@ -82,7 +85,7 @@ const SPAWN_ROLE_LABELS = {
 };
 
 function logSpawn(role, name, cost) {
-	const roleLabel = SPAWN_ROLE_LABELS[role] || '通才兵';
+	const roleLabel = SPAWN_ROLE_LABELS[role] || role;
 	log(`[誕生] 新的${roleLabel} ${name} 誕生了(造價 ${cost} 能量)`);
 }
 
