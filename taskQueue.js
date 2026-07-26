@@ -333,6 +333,19 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.RESERVE_CONTROLLER) {
 		return partTypes.includes(CLAIM);
 	}
+	// Upgrading ranks below hauling and building, which is correct - but only because the creep
+	// hired to do it isn't competing for those. Left open to anyone, an upgrader simply took the
+	// highest-priority task available, which was never UPGRADE, and the controller went nowhere
+	// while its downgrade timer was topped up just often enough to hide it. The role is what makes
+	// a low priority safe: nobody else wants the job, and the one who has it wants nothing else.
+	if (taskType === TASK_TYPES.UPGRADE) {
+		return creep.memory.role === 'upgrader' && partTypes.includes(WORK) && partTypes.includes(CARRY);
+	}
+	// Builders get first claim on building, but repair stays open - it is maintenance that anyone
+	// carrying energy can do, and gating it too would leave decaying roads waiting on a busy crew.
+	if (taskType === TASK_TYPES.BUILD) {
+		return creep.memory.role === 'builder' && partTypes.includes(WORK) && partTypes.includes(CARRY);
+	}
 	return partTypes.includes(WORK) && partTypes.includes(CARRY);
 }
 
@@ -347,8 +360,15 @@ function isCreepReadyForTask(creep, taskType) {
 		taskType === TASK_TYPES.MINE;
 	if (gatheringTask) return true;
 
-	const alwaysPicksUpFirst = taskType === TASK_TYPES.HAUL;
-	if (alwaysPicksUpFirst) return true;
+	// These all fetch their own load from the ledger when they run dry, so arriving empty is the
+	// normal start of a cycle rather than a reason to be passed over. Requiring energy up front
+	// was what kept an empty builder or upgrader out of its own queue.
+	const fetchesItsOwnEnergy =
+		taskType === TASK_TYPES.HAUL ||
+		taskType === TASK_TYPES.BUILD ||
+		taskType === TASK_TYPES.REPAIR ||
+		taskType === TASK_TYPES.UPGRADE;
+	if (fetchesItsOwnEnergy) return true;
 
 	return creep.store[RESOURCE_ENERGY] > 0;
 }

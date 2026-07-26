@@ -57,9 +57,26 @@ function runRefill(creep, structure) {
 	return true;
 }
 
+// Builders and upgraders spend energy but are not carriers, so an empty one used to abandon its
+// task - which put it straight back in the queue where HAUL outranks what it was hired to do, and
+// it never came back. Fetching its own load from the ledger instead is what makes a dedicated role
+// mean anything: it stays on its job across the whole cycle of running dry and refilling.
+//
+// Returns true when there is nothing to fetch and nothing to spend, which is the one case where
+// giving the task up is right - holding it would block anyone else from taking it.
+function refuel(creep) {
+	const supply = logistics.bestSupplyFor(creep);
+	if (!supply) return true;
+
+	// Recorded so other creeps deduct this one's share of the pile while it walks over.
+	creep.memory.task.pickupFrom = supply.id;
+	collectFrom(creep, supply);
+	return false;
+}
+
 function runBuild(creep, site) {
 	const energyEmpty = creep.store[RESOURCE_ENERGY] === 0;
-	if (energyEmpty) return true;
+	if (energyEmpty) return refuel(creep);
 
 	const inRange = creep.pos.inRangeTo(site, 3);
 	if (!inRange) {
@@ -72,7 +89,7 @@ function runBuild(creep, site) {
 
 function runRepair(creep, structure) {
 	const energyEmpty = creep.store[RESOURCE_ENERGY] === 0;
-	if (energyEmpty) return true;
+	if (energyEmpty) return refuel(creep);
 
 	const repaired = structure.hits === structure.hitsMax;
 	if (repaired) return true;
@@ -88,7 +105,7 @@ function runRepair(creep, structure) {
 
 function runUpgrade(creep, controller) {
 	const energyEmpty = creep.store[RESOURCE_ENERGY] === 0;
-	if (energyEmpty) return true;
+	if (energyEmpty) return refuel(creep);
 
 	const inRange = creep.pos.inRangeTo(controller, 3);
 	if (!inRange) {
