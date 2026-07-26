@@ -3,6 +3,8 @@ const TASK_TYPES = require('./taskTypes');
 const { log } = require('./log');
 const creepBodies = require('./creepBodies');
 const hostiles = require('./hostiles');
+const spawnOrder = require('./spawnOrder');
+const taskOrder = require('./taskOrder');
 
 function getAdjacentRoomNames(roomName) {
 	return Object.values(Game.map.describeExits(roomName) || {});
@@ -102,7 +104,7 @@ function addScoutTasks(homeRoom, tasks) {
 		tasks.push({
 			id: `${TASK_TYPES.SCOUT}:${targetRoomName}`,
 			type: TASK_TYPES.SCOUT,
-			priority: config.PRIORITY_SCOUT,
+			priority: taskOrder.basePriority(TASK_TYPES.SCOUT),
 			targetRoomName,
 		});
 	}
@@ -117,7 +119,7 @@ function addRemoteTasks(myUsername, tasks) {
 			tasks.push({
 				id: `${TASK_TYPES.REMOTE_DEFENSE}:${roomName}`,
 				type: TASK_TYPES.REMOTE_DEFENSE,
-				priority: config.PRIORITY_REMOTE_DEFENSE,
+				priority: taskOrder.basePriority(TASK_TYPES.REMOTE_DEFENSE),
 				targetRoomName: roomName,
 			});
 		}
@@ -127,7 +129,7 @@ function addRemoteTasks(myUsername, tasks) {
 			tasks.push({
 				id: `${TASK_TYPES.RESERVE_CONTROLLER}:${roomName}`,
 				type: TASK_TYPES.RESERVE_CONTROLLER,
-				priority: config.PRIORITY_RESERVE,
+				priority: taskOrder.basePriority(TASK_TYPES.RESERVE_CONTROLLER),
 				targetId: intel.controllerId,
 				targetRoomName: roomName,
 			});
@@ -137,7 +139,7 @@ function addRemoteTasks(myUsername, tasks) {
 			tasks.push({
 				id: `${TASK_TYPES.REMOTE_HARVEST}:${sourceId}`,
 				type: TASK_TYPES.REMOTE_HARVEST,
-				priority: config.PRIORITY_REMOTE_HARVEST,
+				priority: taskOrder.basePriority(TASK_TYPES.REMOTE_HARVEST),
 				targetId: sourceId,
 				targetRoomName: roomName,
 			});
@@ -177,7 +179,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 	const unscoutedCount = getUnscoutedAdjacent(homeRoom.name).length;
 	const needsScout = countCreepsWithRole('scout') < unscoutedCount;
 	if (needsScout) {
-		requests.push({ role: 'scout', priority: config.SPAWN_PRIORITY_SCOUT, body: config.SCOUT_BODY, memory: { role: 'scout' } });
+		requests.push({ role: 'scout', priority: spawnOrder.spawnPriority('scout'), body: config.SCOUT_BODY, memory: { role: 'scout' } });
 	}
 
 	for (const roomName of Memory.remoteRooms || []) {
@@ -188,7 +190,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 		if (underAttack && countCreepsWithRole('remoteDefender') === 0) {
 			requests.push({
 				role: 'remoteDefender',
-				priority: config.SPAWN_PRIORITY_REMOTE_DEFENDER,
+				priority: spawnOrder.spawnPriority('remoteDefender'),
 				body: creepBodies.buildDefenderBody(homeRoom.energyAvailable),
 				memory: { role: 'remoteDefender', homeRoom: homeRoom.name },
 			});
@@ -199,7 +201,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 		if (needsReservation && !hasReserver) {
 			requests.push({
 				role: 'reserver',
-				priority: config.SPAWN_PRIORITY_RESERVER,
+				priority: spawnOrder.spawnPriority('reserver'),
 				body: config.RESERVER_BODY,
 				memory: { role: 'reserver', targetRoom: roomName },
 			});
@@ -210,7 +212,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 			if (!hasHarvester) {
 				requests.push({
 					role: 'remoteHarvester',
-					priority: config.SPAWN_PRIORITY_REMOTE_HARVESTER,
+					priority: spawnOrder.spawnPriority('remoteHarvester'),
 					body: creepBodies.buildRemoteHarvesterBody(homeRoom.energyCapacityAvailable),
 					memory: { role: 'remoteHarvester', homeRoom: homeRoom.name },
 				});

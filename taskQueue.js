@@ -4,6 +4,7 @@ const { logAssign, logDefense, describeTask } = require('./log');
 const expansion = require('./expansion');
 const mining = require('./mining');
 const buildOrder = require('./buildOrder');
+const taskOrder = require('./taskOrder');
 const hostiles = require('./hostiles');
 
 function buildTaskQueue(room) {
@@ -31,25 +32,9 @@ function addDefenseTasks(room, tasks) {
 	tasks.push({
 		id: `${TASK_TYPES.DEFENSE}:${room.name}`,
 		type: TASK_TYPES.DEFENSE,
-		priority: config.PRIORITY.DEFENSE,
+		priority: taskOrder.basePriority(TASK_TYPES.DEFENSE),
 		targetId: target.id,
 	});
-}
-
-// Energy sitting in spawn and extensions is the room's whole spawning budget: the body it can
-// build is decided by energyAvailable at that instant, not by the capacity it theoretically has.
-// Empty extensions are therefore the same kind of hard block as an expiring downgrade timer -
-// they cap every creep the room can produce - so the configured priority acts as the baseline for
-// full stores and rises as they drain, reaching defense-level urgency when they are empty. How
-// the room values refilling against building stays a strategy choice; how badly it currently
-// needs it is read from the stores. Both numbers are plain Room properties, so this costs nothing.
-function refillPriority(room) {
-	const capacity = room.energyCapacityAvailable;
-	if (!capacity) return config.PRIORITY.REFILL_SPAWN;
-
-	const filled = Math.max(0, Math.min(1, room.energyAvailable / capacity));
-	const spread = config.PRIORITY.DEFENSE - config.PRIORITY.REFILL_SPAWN;
-	return Math.round(config.PRIORITY.REFILL_SPAWN + spread * (1 - filled));
 }
 
 function addRefillTasks(room, tasks) {
@@ -58,7 +43,7 @@ function addRefillTasks(room, tasks) {
 			(structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION) &&
 			structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
 	});
-	const priority = refillPriority(room);
+	const priority = taskOrder.refillPriority(room);
 	for (const structure of spawnsAndExtensions) {
 		tasks.push({
 			id: `${TASK_TYPES.REFILL_SPAWN}:${structure.id}`,
@@ -76,7 +61,7 @@ function addRefillTasks(room, tasks) {
 		tasks.push({
 			id: `${TASK_TYPES.REFILL_TOWER}:${tower.id}`,
 			type: TASK_TYPES.REFILL_TOWER,
-			priority: config.PRIORITY.REFILL_TOWER,
+			priority: taskOrder.basePriority(TASK_TYPES.REFILL_TOWER),
 			targetId: tower.id,
 		});
 	}
@@ -113,7 +98,7 @@ function addMiningTasks(room, tasks) {
 			tasks.push({
 				id: `${TASK_TYPES.MINE}:${source.id}:${tile.x},${tile.y}`,
 				type: TASK_TYPES.MINE,
-				priority: config.PRIORITY.HARVEST,
+				priority: taskOrder.basePriority(TASK_TYPES.MINE),
 				targetId: source.id,
 				workPos: { x: tile.x, y: tile.y },
 			});
@@ -130,7 +115,7 @@ function addMiningTasks(room, tasks) {
 			tasks.push({
 				id: `${TASK_TYPES.HAUL}:${source.id}:${currentHaulers + slot}`,
 				type: TASK_TYPES.HAUL,
-				priority: config.PRIORITY.HAUL,
+				priority: taskOrder.basePriority(TASK_TYPES.HAUL),
 				targetId: source.id,
 			});
 		}
@@ -147,7 +132,7 @@ function addMiningTasks(room, tasks) {
 			tasks.push({
 				id: `${TASK_TYPES.HARVEST}:${source.id}:${currentFallbackHarvesters + slot}`,
 				type: TASK_TYPES.HARVEST,
-				priority: config.PRIORITY.HARVEST_FALLBACK,
+				priority: taskOrder.basePriority(taskOrder.HARVEST_FALLBACK),
 				targetId: source.id,
 			});
 		}
@@ -174,7 +159,7 @@ function addRecycleTasks(room, tasks) {
 		tasks.push({
 			id: `${TASK_TYPES.RECYCLE}:${creep.name}`,
 			type: TASK_TYPES.RECYCLE,
-			priority: config.PRIORITY.HARVEST_FALLBACK,
+			priority: taskOrder.basePriority(TASK_TYPES.RECYCLE),
 			targetId: spawn.id,
 			recycleCreepName: creep.name,
 		});
@@ -207,6 +192,8 @@ function ensureContainerSite(room, source) {
 }
 
 function placeContainerNear(room, source) {
+	if (buildOrder.siteBudgetRemaining(room) <= 0) return;
+
 	const tile = mining.getAccessibleTiles(room, source.pos)[0];
 	if (!tile) return;
 
@@ -233,7 +220,7 @@ function ensureExtensionSites(room) {
 		filter: site => site.structureType === STRUCTURE_EXTENSION,
 	}).length;
 
-	const missing = allowed - built - queued;
+	const missing = Math.min(allowed - built - queued, buildOrder.siteBudgetRemaining(room));
 	if (missing <= 0) return;
 
 	placeExtensionSites(room, spawn, missing);
@@ -318,7 +305,7 @@ function addRepairTasks(room, tasks) {
 		tasks.push({
 			id: `${TASK_TYPES.REPAIR}:${structureId}`,
 			type: TASK_TYPES.REPAIR,
-			priority: config.PRIORITY.REPAIR,
+			priority: taskOrder.basePriority(TASK_TYPES.REPAIR),
 			targetId: structureId,
 		});
 	}
@@ -341,21 +328,6 @@ function getRepairTargetIds(room) {
 	return Memory.repairCache[room.name].ids;
 }
 
-// The downgrade clock is a hard game deadline, not a strategy call: let it run out and the room
-// drops a controller level, taking every extension that level allowed with it. So the configured
-// UPGRADE priority is only the baseline for a full clock - as it runs down the task escalates
-// continuously toward defense-level urgency. Continuous rather than a threshold means there's no
-// "how close is too close" number to guess, and a single upgrade refills the clock and drops the
-// priority straight back to baseline, so the room spends only as much on it as the clock demands.
-function upgradePriority(controller) {
-	const fullClock = CONTROLLER_DOWNGRADE[controller.level];
-	if (!fullClock) return config.PRIORITY.UPGRADE;
-
-	const clockRemaining = Math.max(0, Math.min(1, controller.ticksToDowngrade / fullClock));
-	const spread = config.PRIORITY.DEFENSE - config.PRIORITY.UPGRADE;
-	return Math.round(config.PRIORITY.UPGRADE + spread * (1 - clockRemaining));
-}
-
 function addUpgradeTask(room, tasks) {
 	const controller = room.controller;
 	const controllerMissingOrNotMine = !controller || !controller.my;
@@ -364,7 +336,7 @@ function addUpgradeTask(room, tasks) {
 	tasks.push({
 		id: `${TASK_TYPES.UPGRADE}:${controller.id}`,
 		type: TASK_TYPES.UPGRADE,
-		priority: upgradePriority(controller),
+		priority: taskOrder.upgradePriority(controller),
 		targetId: controller.id,
 	});
 }

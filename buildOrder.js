@@ -1,5 +1,7 @@
 const config = require('./config');
 const hostiles = require('./hostiles');
+const taskOrder = require('./taskOrder');
+const TASK_TYPES = require('./taskTypes');
 
 // What to build first isn't a preference to type into config: at any given moment the room is
 // blocked on something concrete, and the structure that unblocks it is the one worth spending
@@ -28,6 +30,18 @@ const RANKED_TYPES = [
 	STRUCTURE_WALL,
 	STRUCTURE_ROAD,
 ];
+
+// The spec caps concurrent sites at five. Builders divide their effort across whatever is open,
+// so a long queue means many sites creeping toward completion together and none of them finishing
+// - and every open site holds a slot in the room's shared site budget, which is what a tower or
+// extension needs to be placeable at all. Five keeps work converging on finished structures.
+const MAX_CONCURRENT_SITES = 5;
+
+// Every placement path has to ask before creating a site, or they collectively overrun the cap
+// while each stays under it on its own.
+function siteBudgetRemaining(room) {
+	return Math.max(0, MAX_CONCURRENT_SITES - room.find(FIND_MY_CONSTRUCTION_SITES).length);
+}
 
 // FIND_MY_STRUCTURES plus a per-source container scan is far too expensive to repeat every tick
 // just to order a build queue, and none of it changes quickly - so it reuses the same cadence
@@ -97,12 +111,12 @@ function tierFor(structureType, needs, level, underAttack) {
 	return OPTIONAL;
 }
 
-// Offsets order sites *within* BUILD; config.PRIORITY.BUILD - a genuine strategy choice about how
-// building trades off against hauling, repairing and upgrading - still decides where the whole
-// group sits, so the task-type ordering the user set stays in force.
+// Tiers order sites *within* BUILD only; BUILD's own rank in taskOrder decides where the whole
+// group sits against hauling, repairing and upgrading. Keeping the two separate means a blocking
+// structure can outrank an optional one without build work as a whole jumping the queue.
 function buildPriority(room, structureType, underAttack) {
 	const needs = getCachedNeeds(room);
-	return config.PRIORITY.BUILD + tierFor(structureType, needs, room.controller.level, underAttack);
+	return taskOrder.basePriority(TASK_TYPES.BUILD) + tierFor(structureType, needs, room.controller.level, underAttack);
 }
 
 // Same computation the task queue runs, shaped for display: what the room would prioritise right
@@ -117,9 +131,9 @@ function describeBuildOrder(room) {
 		return {
 			structureType,
 			tier: TIER_LABELS[tier],
-			priority: config.PRIORITY.BUILD + tier,
+			priority: taskOrder.basePriority(TASK_TYPES.BUILD) + tier,
 		};
 	}).sort((a, b) => b.priority - a.priority);
 }
 
-module.exports = { buildPriority, describeBuildOrder };
+module.exports = { buildPriority, describeBuildOrder, siteBudgetRemaining, MAX_CONCURRENT_SITES };

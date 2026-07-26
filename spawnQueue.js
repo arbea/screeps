@@ -4,6 +4,7 @@ const expansion = require('./expansion');
 const mining = require('./mining');
 const creepBodies = require('./creepBodies');
 const hostiles = require('./hostiles');
+const spawnOrder = require('./spawnOrder');
 
 function getAvailableSpawn(room) {
 	return room.find(FIND_MY_SPAWNS, { filter: spawn => !spawn.spawning })[0];
@@ -29,7 +30,7 @@ function addDefenderRequest(room, requests) {
 
 	requests.push({
 		role: 'defender',
-		priority: config.SPAWN_PRIORITY.DEFENDER,
+		priority: spawnOrder.spawnPriority('defender'),
 		body: creepBodies.buildDefenderBody(room.energyAvailable),
 	});
 }
@@ -84,7 +85,7 @@ function addMinerRequest(room, requests) {
 
 	requests.push({
 		role: 'miner',
-		priority: config.SPAWN_PRIORITY.MINER,
+		priority: spawnOrder.spawnPriority('miner'),
 		body: buildMinerBody(room.energyCapacityAvailable),
 		memory: { role: 'miner' },
 	});
@@ -147,7 +148,7 @@ function addGeneralistRequest(room, taskBacklog, requests) {
 
 	requests.push({
 		role: 'generalist',
-		priority: config.SPAWN_PRIORITY.GENERALIST,
+		priority: spawnOrder.spawnPriority('generalist'),
 		body: buildGeneralistBody(room.energyAvailable),
 	});
 }

@@ -16,12 +16,10 @@ function cleanDeadCreepMemory() {
 	}
 }
 
-// Pre-creates the containers a nested Memory.config write (e.g. config.PRIORITY.HARVEST)
+// Pre-creates the containers a nested Memory.config write (e.g. config.GENERALIST_RATIO.work)
 // needs to already exist, since the Screeps memory-path API can't create intermediate objects.
 function ensureConfigMemoryShape() {
 	if (!Memory.config) Memory.config = {};
-	if (!Memory.config.PRIORITY) Memory.config.PRIORITY = {};
-	if (!Memory.config.SPAWN_PRIORITY) Memory.config.SPAWN_PRIORITY = {};
 	if (!Memory.config.GENERALIST_RATIO) Memory.config.GENERALIST_RATIO = {};
 }
 
