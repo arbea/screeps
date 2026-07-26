@@ -90,3 +90,4 @@ changes are recorded only here.
 - Narrow the AI usage band to 80-90% (was 85-95%).
 - Treat a missing structure-scan timestamp as stale: `Game.time - undefined` is NaN, which is not >= anything, so the structure cache read as fresh forever and the map snapshot froze the day it shipped - the 76 relic walls the dashboard kept reporting were a snapshot the bot could no longer replace.
 - Anchor the usage gauge to the last official reading instead of dividing local spend by the calibrated ceiling: the differential ceiling is a slope, and using it alone assumed the usage this machine cannot see was zero, which read 19% against an account page saying 48%.
+- Re-check the bunker anchor against real walk cost and overturn round 1: the open 11x11 block is 14 ticks further from the spawn than a column beside it, and RCL8 never needs that much room - the layout hugs the spawn instead.
