@@ -1,4 +1,5 @@
 const config = require('./config');
+const hostiles = require('./hostiles');
 
 // What to build first isn't a preference to type into config: at any given moment the room is
 // blocked on something concrete, and the structure that unblocks it is the one worth spending
@@ -108,7 +109,7 @@ function buildPriority(room, structureType, underAttack) {
 // now and why, so the order is visible without being editable.
 function describeBuildOrder(room) {
 	const needs = getCachedNeeds(room);
-	const underAttack = room.find(FIND_HOSTILE_CREEPS).length > 0;
+	const underAttack = hostiles.findHostileCreeps(room).length > 0;
 	const level = room.controller.level;
 
 	return RANKED_TYPES.map(structureType => {

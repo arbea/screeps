@@ -1,4 +1,10 @@
 const DEFAULTS = {
+	// The alliance protocol's trust circle. Who we stand with is a standing commitment, not
+	// anything the map can tell us, so it belongs here - but unlike the other entries it must
+	// never be widened by what allies broadcast about themselves: the protocol specifies each
+	// player enforces their own list, and auto-merging one would let any listed name add more.
+	ALLIES: ['douasin', 'arbea'],
+
 	PRIORITY: {
 		DEFENSE: 100,
 		REFILL_SPAWN: 90,

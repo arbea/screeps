@@ -4,6 +4,7 @@ const { logAssign, logDefense, describeTask } = require('./log');
 const expansion = require('./expansion');
 const mining = require('./mining');
 const buildOrder = require('./buildOrder');
+const hostiles = require('./hostiles');
 
 function buildTaskQueue(room) {
 	const tasks = [];
@@ -23,7 +24,7 @@ function buildTaskQueue(room) {
 }
 
 function addDefenseTasks(room, tasks) {
-	const target = room.find(FIND_HOSTILE_CREEPS)[0];
+	const target = hostiles.findHostileCreeps(room)[0];
 	if (!target) return;
 
 	logDefense(room, target);
@@ -300,7 +301,7 @@ function countCreepsAssignedTo(targetId, taskType) {
 }
 
 function addBuildTasks(room, tasks) {
-	const underAttack = room.find(FIND_HOSTILE_CREEPS).length > 0;
+	const underAttack = hostiles.findHostileCreeps(room).length > 0;
 
 	for (const site of room.find(FIND_MY_CONSTRUCTION_SITES)) {
 		tasks.push({

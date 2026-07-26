@@ -1,6 +1,7 @@
 const TASK_TYPES = require('./taskTypes');
 const { logDone } = require('./log');
 const { checkAndHandleStall } = require('./stallDetection');
+const hostiles = require('./hostiles');
 
 function runDefense(creep, hostile) {
 	const inRange = creep.pos.inRangeTo(hostile, 1);
@@ -241,7 +242,7 @@ function runRemoteDefense(creep, task) {
 		return false;
 	}
 
-	const hostile = creep.room.find(FIND_HOSTILE_CREEPS)[0];
+	const hostile = hostiles.findHostileCreeps(creep.room)[0];
 	if (!hostile) return true;
 
 	const inRange = creep.pos.inRangeTo(hostile, 1);

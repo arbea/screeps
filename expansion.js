@@ -2,6 +2,7 @@ const config = require('./config');
 const TASK_TYPES = require('./taskTypes');
 const { log } = require('./log');
 const creepBodies = require('./creepBodies');
+const hostiles = require('./hostiles');
 
 function getAdjacentRoomNames(roomName) {
 	return Object.values(Game.map.describeExits(roomName) || {});
@@ -25,7 +26,7 @@ function updateRoomIntel() {
 			controllerId: room.controller ? room.controller.id : null,
 			owner: room.controller && room.controller.owner ? room.controller.owner.username : null,
 			reservedBy: room.controller && room.controller.reservation ? room.controller.reservation.username : null,
-			hostileCount: room.find(FIND_HOSTILE_CREEPS).length,
+			hostileCount: hostiles.findHostileCreeps(room).length,
 		};
 	}
 }
@@ -34,7 +35,11 @@ function scoreRoom(roomName) {
 	const intel = Memory.rooms[roomName];
 	if (!intel) return -Infinity;
 
-	const disqualified = !!intel.owner || intel.sourceIds.length < config.MIN_SOURCES_FOR_REMOTE;
+	// A room an ally has claimed or reserved is theirs. Without the reservation check we would
+	// keep sending reservers to overwrite their claim on a room they are already mining, which
+	// is the same trespass as attacking them - just slower.
+	const takenByAlly = hostiles.isAlly(intel.owner) || hostiles.isAlly(intel.reservedBy);
+	const disqualified = takenByAlly || !!intel.owner || intel.sourceIds.length < config.MIN_SOURCES_FOR_REMOTE;
 	if (disqualified) return -Infinity;
 
 	return intel.sourceIds.length * 10 - intel.hostileCount * 100;

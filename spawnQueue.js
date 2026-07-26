@@ -3,6 +3,7 @@ const { logSpawn } = require('./log');
 const expansion = require('./expansion');
 const mining = require('./mining');
 const creepBodies = require('./creepBodies');
+const hostiles = require('./hostiles');
 
 function getAvailableSpawn(room) {
 	return room.find(FIND_MY_SPAWNS, { filter: spawn => !spawn.spawning })[0];
@@ -21,9 +22,9 @@ function hasStaleBacklog(taskBacklog) {
 }
 
 function addDefenderRequest(room, requests) {
-	const hostiles = room.find(FIND_HOSTILE_CREEPS);
+	const attackers = hostiles.findHostileCreeps(room);
 	const defenderCount = countCreepsWithBodyPart(room, ATTACK) + countCreepsWithBodyPart(room, RANGED_ATTACK);
-	const underAttackAndUndefended = hostiles.length > 0 && defenderCount === 0;
+	const underAttackAndUndefended = attackers.length > 0 && defenderCount === 0;
 	if (!underAttackAndUndefended) return;
 
 	requests.push({
