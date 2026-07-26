@@ -3,6 +3,7 @@ const kernel = require('./kernel');
 const taskQueue = require('./taskQueue');
 const creepActions = require('./creepActions');
 const spawnQueue = require('./spawnQueue');
+const population = require('./population');
 const mapSnapshot = require('./mapSnapshot');
 const economyStats = require('./economyStats');
 const strategySnapshot = require('./strategySnapshot');
@@ -17,11 +18,8 @@ function cleanDeadCreepMemory() {
 	}
 }
 
-// Pre-creates the containers a nested Memory.config write (e.g. config.GENERALIST_RATIO.work)
-// needs to already exist, since the Screeps memory-path API can't create intermediate objects.
 function ensureConfigMemoryShape() {
 	if (!Memory.config) Memory.config = {};
-	if (!Memory.config.GENERALIST_RATIO) Memory.config.GENERALIST_RATIO = {};
 }
 
 function runMemory() {
@@ -68,6 +66,7 @@ function runColonies(mode) {
 	const essentialOnly = mode === kernel.MODES.CRISIS;
 
 	for (const room of ownedRooms()) {
+		population.migrateGeneralists(room);
 		taskQueue.runTaskQueue(room);
 
 		if (!essentialOnly) {
@@ -77,7 +76,7 @@ function runColonies(mode) {
 			strategySnapshot.publishStrategySnapshot(room);
 		}
 
-		spawnQueue.runSpawnQueue(room, Memory.taskBacklog);
+		spawnQueue.runSpawnQueue(room);
 	}
 }
 

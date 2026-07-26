@@ -81,12 +81,20 @@ function getUnscoutedAdjacent(homeRoomName) {
 	return getAdjacentRoomNames(homeRoomName).filter(roomName => !Memory.rooms[roomName]);
 }
 
-function maxRemoteRooms() {
-	// Adjacent rooms are naturally capped at 4; clamp regardless in case Memory.config carries
-	// a malformed override, matching the defensive posture adopted after the CPU incident.
-	const value = config.MAX_REMOTE_ROOMS;
-	const invalid = typeof value !== 'number' || !Number.isFinite(value) || value < 0;
-	return invalid ? 2 : Math.min(value, 4);
+// How many remote rooms we can work isn't a preference either - it's however many we can actually
+// staff. A remote room needs a harvester per source and a reserver, so the ceiling is what the
+// room can afford to keep alive out there, and a room that cannot yet build a remote harvester at
+// all supports none. Adjacent rooms cap it at four regardless, one per compass direction.
+function maxRemoteRooms(homeRoom) {
+	const harvesterBody = creepBodies.bodyFor('remoteHarvester', homeRoom.energyCapacityAvailable);
+	if (!harvesterBody) return 0;
+
+	// One room's worth of staff is a harvester for each of its sources plus a reserver; comparing
+	// that against the energy the room can field at once gives how many we can sustain.
+	const roomStaffCost = creepBodies.bodyCost(harvesterBody) * 2 + creepBodies.bodyCost(creepBodies.bodyFor('reserver', homeRoom.energyCapacityAvailable) || []);
+	const affordable = Math.floor(homeRoom.energyCapacityAvailable * 2 / Math.max(1, roomStaffCost));
+
+	return Math.max(0, Math.min(affordable, 4));
 }
 
 function maintainRemoteRoomList(homeRoomName) {
@@ -98,7 +106,7 @@ function maintainRemoteRoomList(homeRoomName) {
 		return stillGood;
 	});
 
-	const hasSlot = Memory.remoteRooms.length < maxRemoteRooms();
+	const hasSlot = Memory.remoteRooms.length < maxRemoteRooms(Game.rooms[homeRoomName]);
 	if (!hasSlot) return;
 
 	const candidate = pickBestUnclaimedCandidate(homeRoomName);
@@ -191,7 +199,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 	const unscoutedCount = getUnscoutedAdjacent(homeRoom.name).length;
 	const needsScout = countCreepsWithRole('scout') < unscoutedCount;
 	if (needsScout) {
-		requests.push({ role: 'scout', priority: spawnOrder.spawnPriority('scout'), body: config.SCOUT_BODY, memory: { role: 'scout' } });
+		requests.push({ role: 'scout', priority: spawnOrder.spawnPriority('scout'), body: creepBodies.bodyFor('scout', homeRoom.energyCapacityAvailable), memory: { role: 'scout' } });
 	}
 
 	for (const roomName of Memory.remoteRooms || []) {
@@ -203,7 +211,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 			requests.push({
 				role: 'remoteDefender',
 				priority: spawnOrder.spawnPriority('remoteDefender'),
-				body: creepBodies.buildDefenderBody(homeRoom.energyAvailable),
+				body: creepBodies.bodyFor('remoteDefender', homeRoom.energyAvailable),
 				memory: { role: 'remoteDefender', homeRoom: homeRoom.name },
 			});
 		}
@@ -214,7 +222,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 			requests.push({
 				role: 'reserver',
 				priority: spawnOrder.spawnPriority('reserver'),
-				body: config.RESERVER_BODY,
+				body: creepBodies.bodyFor('reserver', homeRoom.energyCapacityAvailable),
 				memory: { role: 'reserver', targetRoom: roomName },
 			});
 		}
@@ -225,7 +233,7 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 				requests.push({
 					role: 'remoteHarvester',
 					priority: spawnOrder.spawnPriority('remoteHarvester'),
-					body: creepBodies.buildRemoteHarvesterBody(homeRoom.energyCapacityAvailable),
+					body: creepBodies.bodyFor('remoteHarvester', homeRoom.energyCapacityAvailable),
 					memory: { role: 'remoteHarvester', homeRoom: homeRoom.name },
 				});
 			}

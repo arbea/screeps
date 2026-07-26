@@ -3,6 +3,7 @@ const mining = require('./mining');
 const creepBodies = require('./creepBodies');
 const buildOrder = require('./buildOrder');
 const logistics = require('./logistics');
+const population = require('./population');
 
 function countCreepsAssignedTo(targetId, taskType) {
 	return _.filter(
@@ -26,15 +27,6 @@ function countIdleBrokeGeneralists(room) {
 			creep.memory.role !== 'miner' &&
 			!creep.memory.task &&
 			creep.store[RESOURCE_ENERGY] === 0
-	).length;
-}
-
-const NON_GENERALIST_ROLES = new Set(['miner', 'scout', 'reserver', 'remoteHarvester', 'remoteDefender', 'defender']);
-
-function countGeneralists(room) {
-	return _.filter(
-		Game.creeps,
-		creep => creep.room.name === room.name && !NON_GENERALIST_ROLES.has(creep.memory.role)
 	).length;
 }
 
@@ -73,14 +65,29 @@ function publishStrategySnapshot(room) {
 			energyAvailableToCollect: supplies.reduce((sum, supply) => sum + supply.amount, 0),
 			unclaimedRequests: logistics.unclaimedRequestCount(room),
 		},
-		generalist: {
-			currentCount: countGeneralists(room),
-			fallbackCapacity: perSource.reduce((sum, s) => sum + s.fallbackCapacity, 0),
+		crew: {
+			miner: population.countRole(room, 'miner'),
+			hauler: population.countRole(room, 'hauler'),
+			builder: population.countRole(room, 'builder'),
+			upgrader: population.countRole(room, 'upgrader'),
 			activeHaulers: countActiveHaulers(room),
 			idleBroke: countIdleBrokeGeneralists(room),
+			fallbackCapacity: perSource.reduce((sum, s) => sum + s.fallbackCapacity, 0),
 		},
-		defenderBodySize: creepBodies.buildDefenderBody(room.energyAvailable).length,
-		remoteHarvesterBodySize: creepBodies.buildRemoteHarvesterBody(room.energyCapacityAvailable).length,
+		// Published so the population maths is inspectable rather than trusted.
+		population: {
+			miner: population.minerTarget(room),
+			hauler: population.haulerTarget(room, creepBodies.bodyFor('hauler', room.energyCapacityAvailable) || []),
+			builder: population.builderTarget(room),
+			upgrader: population.upgraderTarget(room),
+			emergency: population.isEmergency(room),
+		},
+		bodySizes: {
+			hauler: (creepBodies.bodyFor('hauler', room.energyCapacityAvailable) || []).length,
+			builder: (creepBodies.bodyFor('builder', room.energyCapacityAvailable) || []).length,
+			miner: (creepBodies.bodyFor('miner', room.energyCapacityAvailable) || []).length,
+			remoteHarvester: (creepBodies.bodyFor('remoteHarvester', room.energyCapacityAvailable) || []).length,
+		},
 		buildOrder: buildOrder.describeBuildOrder(room),
 	};
 }
