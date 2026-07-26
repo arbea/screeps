@@ -115,6 +115,8 @@
 - 協定 v1 走 `RawMemory` public segment 90,20 tick 一輪。`ack` 只是已讀回條,不代表同意。
 - **盟軍對帳由我自己回應**,使用者不介入,往來紀錄留在 dashboard 對話頁。
 - 一則訊息不要太長:Screeps 的 console expression 有大小上限,太長會被拒(`expression size is too large`)。一則講一個主題,300 字元上下是安全的。
+- **中文訊息不要用 curl 從 Git Bash 送**——編碼會在 shell 層爛掉,曾把 3 則亂碼排進 outbox(已清掉重送)。要送非 ASCII 內容,寫一個 UTF-8 的 Node 腳本去 POST `/api/ally/say`。
+- 對方的操作文件(2026-07-26 分享)要求:每小時在對帳頁記錄戰況(時間戳/帳號/RCL/DEFCON/戰爭階段/預測/異常)。已由 dashboard 自動化:server 每小時寫 `recon-log.json`,啟動時先寫一筆,`/api/recon` 供頁面讀,不花輪詢。
 
 ---
 
@@ -127,6 +129,6 @@ E47S29,RCL 2。extension 5/5 已達上限——**這一級沒有任何建築能�
 - **hauler 分派的矛盾**:曾經觀察到 extension 有空位、沒有任何 creep 持 HAUL 任務(所以 `inTransitTo=0`)、線上程式與本地逐字一致,但 `collectRequests()` 回 0。照原始碼推論它就該產生請求。**沒有解開,現在觀察不到了。**再出現時要從這裡查。
 - **外礦**:E47S28。能量上限低於 650 就生不出 reserver(CLAIM+MOVE),所以無法佔領,產出只有一半。上限拉到 650 後 `RESERVE_CONTROLLER` 任務會自己回來。
 - **E48S29 由 parnell 持有,房內 4 個敵方單位**。舊 bug(只讀盟友情報的 owner 形狀,不讀自家的)讓目標頁一直顯示「無主」。「佔領右側礦場」實際上是對有主房間開戰——RCL2 零戰力做不到,也不該由我單方面決定開打。這個目標先擱置,卡在哪一步儀表板現在照實顯示。
-- **礦源 (45,7) 的重生虧損比另一顆高**(近期 24% 對 7%)。兩顆都有礦工;差異的原因還沒查——可能是體型、換班空窗或走位。查的時候先看該礦工的 WORK 數與存活紀錄。
+- **(45,7) 虧損已破案,兩個原因**:①繞人重算的路徑忘了把建築設成障礙,一條穿過 extension 的路讓礦工 349 tick 走不出家門(movement.js 已修);②應急 1W 礦工佔著唯一礦位,挖 2/tick 對重生 10/tick。它 ttl 到 ~81803000 自然死亡後會補 5W 正規體型——下次巡檢確認替補的 WORK 數。注意 `strategySnapshot` 的 `currentMiners` 只數頭數不數 WORK,體型不足在儀表板上看不出來。
 
 已解決、留個座標:REPAIR 任務從 108 → 32——牆不會衰減,永遠低於 80% 門檻是因為 hitsMax 是 3 億,已把牆排除在維修掃描外(taskQueue.js getRepairTargetIds)。剩下的 32 筆是路和容器的正當衰減維護。

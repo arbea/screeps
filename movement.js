@@ -36,6 +36,21 @@ function destinationOf(target) {
 	return target.pos || target;
 }
 
+// PathFinder knows nothing about structures on its own - whatever the cost matrix doesn't mention
+// is walkable to it. So every search has to start from this matrix, whatever else it adds on top.
+function structureCosts(room) {
+	const costs = new PathFinder.CostMatrix();
+	for (const structure of room.find(FIND_STRUCTURES)) {
+		// Roads are what the traffic survey builds; pathing has to prefer them or laying
+		// them changes nothing.
+		if (structure.structureType === STRUCTURE_ROAD) costs.set(structure.pos.x, structure.pos.y, 1);
+		else if (structure.structureType !== STRUCTURE_CONTAINER && structure.structureType !== STRUCTURE_RAMPART) {
+			costs.set(structure.pos.x, structure.pos.y, 0xff);
+		}
+	}
+	return costs;
+}
+
 // The whole point of the override: a route is computed once and then followed from memory. Calling
 // moveTo every tick recomputes the same path from a position one step further along, which is the
 // same answer at full price - and at 20 CPU a tick with twenty creeps, it is most of the budget.
@@ -51,16 +66,7 @@ function findPath(creep, destination, range) {
 				const room = Game.rooms[roomName];
 				if (!room) return;
 
-				const costs = new PathFinder.CostMatrix();
-				for (const structure of room.find(FIND_STRUCTURES)) {
-					// Roads are what the traffic survey builds; pathing has to prefer them or laying
-					// them changes nothing.
-					if (structure.structureType === STRUCTURE_ROAD) costs.set(structure.pos.x, structure.pos.y, 1);
-					else if (structure.structureType !== STRUCTURE_CONTAINER && structure.structureType !== STRUCTURE_RAMPART) {
-						costs.set(structure.pos.x, structure.pos.y, 0xff);
-					}
-				}
-				return costs;
+				return structureCosts(room);
 			},
 		}
 	);
@@ -70,9 +76,14 @@ function findPath(creep, destination, range) {
 
 // Recomputed only when stuck, and only then are creeps treated as obstacles: they move, so routing
 // around them normally would mean re-pathing constantly for blockages that clear themselves.
+//
+// Creeps are added ON TOP of the structure costs, not instead of them. This matrix used to start
+// empty, so the detour route knew about creeps but had forgotten every wall the normal route
+// avoided - one blocked step was enough to hand a creep a path straight through an extension,
+// where it stood reissuing an accepted-but-impossible move, re-pathed on the same forgetful
+// matrix two ticks later, and got the same path back. The miner that spent 349 ticks two tiles
+// from its spawn point died of exactly this.
 function findPathAroundCreeps(creep, destination, range) {
-	const blocked = new Set(creep.room.find(FIND_CREEPS).map(other => `${other.pos.x},${other.pos.y}`));
-
 	const result = PathFinder.search(
 		creep.pos,
 		{ pos: destination, range },
@@ -83,10 +94,9 @@ function findPathAroundCreeps(creep, destination, range) {
 			roomCallback(roomName) {
 				if (roomName !== creep.room.name) return;
 
-				const costs = new PathFinder.CostMatrix();
-				for (const key of blocked) {
-					const [x, y] = key.split(',').map(Number);
-					costs.set(x, y, 0xff);
+				const costs = structureCosts(creep.room);
+				for (const other of creep.room.find(FIND_CREEPS)) {
+					costs.set(other.pos.x, other.pos.y, 0xff);
 				}
 				return costs;
 			},

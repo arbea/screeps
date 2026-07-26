@@ -45,3 +45,6 @@ changes are recorded only here.
 - Read the owner from our own intel's shape too, which had E48S29 (held by parnell) down as unowned.
 - Add /api/autonomy so the watcher can glance at the tier without spending a Screeps call.
 - Build tools/watch-dash.js, the wake-up watcher the handbook described but nobody had written.
+- Give a stuck creep's detour path the same walls the straight one respects; a miner spent 349 ticks two tiles from home for want of them.
+- Number the goal cards by stated priority: AI usage, API restraint, source loss, controller, conquest.
+- Record an hourly battle-status entry on the reconciliation page, in the format the ally's document specifies.
