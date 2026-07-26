@@ -148,11 +148,10 @@ function addRemoteTasks(myUsername, tasks) {
 function runExpansion(homeRoom) {
 	if (!config.EXPANSION_ENABLED) return [];
 
+	// Intel gathering has moved to the kernel's own system, which owns when it runs; this only
+	// consumes what that produced.
 	const isExpansionTick = Game.time % config.EXPANSION_INTERVAL === 0;
-	if (isExpansionTick) {
-		updateRoomIntel();
-		maintainRemoteRoomList(homeRoom.name);
-	}
+	if (isExpansionTick) maintainRemoteRoomList(homeRoom.name);
 
 	const myUsername = homeRoom.controller.owner.username;
 	const tasks = [];
@@ -222,4 +221,4 @@ function getExpansionSpawnRequests(homeRoom, myUsername) {
 	return requests;
 }
 
-module.exports = { runExpansion, getExpansionSpawnRequests };
+module.exports = { runExpansion, getExpansionSpawnRequests, updateRoomIntel };

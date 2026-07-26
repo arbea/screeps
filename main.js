@@ -1,12 +1,13 @@
 const config = require('./config');
+const kernel = require('./kernel');
 const taskQueue = require('./taskQueue');
 const creepActions = require('./creepActions');
 const spawnQueue = require('./spawnQueue');
 const mapSnapshot = require('./mapSnapshot');
 const economyStats = require('./economyStats');
 const strategySnapshot = require('./strategySnapshot');
+const expansion = require('./expansion');
 const traffic = require('./traffic');
-const { log } = require('./log');
 
 function cleanDeadCreepMemory() {
 	for (const name in Memory.creeps) {
@@ -24,39 +25,69 @@ function ensureConfigMemoryShape() {
 	if (!Memory.config.GENERALIST_RATIO) Memory.config.GENERALIST_RATIO = {};
 }
 
-module.exports.loop = function () {
+function runMemory() {
 	if (!Memory.taskBacklog) Memory.taskBacklog = {};
 	if (!Memory.eventLog) Memory.eventLog = [];
 	ensureConfigMemoryShape();
 	config.applyOverrides();
 	cleanDeadCreepMemory();
+}
 
+function ownedRooms() {
+	const rooms = [];
 	for (const roomName in Game.rooms) {
 		const room = Game.rooms[roomName];
 		const owned = room.controller && room.controller.my;
-		if (!owned) continue;
+		if (owned) rooms.push(room);
+	}
+	return rooms;
+}
 
+// Room intel is gathered from rooms we already have vision into, so it costs nothing to look but
+// is worth skipping when CPU is short - it only feeds expansion decisions, which tolerate being
+// a few ticks stale. That is what makes it a flex system.
+function runIntel() {
+	// Being a flex system governs what gets shed when CPU is short; this interval is the separate
+	// question of how often the scan is worth doing at all, and rooms change slowly enough that
+	// every tick would be waste even with CPU to spare.
+	const isIntelTick = Game.time % config.EXPANSION_INTERVAL === 0;
+	if (!isIntelTick) return;
+
+	expansion.updateRoomIntel();
+}
+
+// Task building, spawning and creep actions are what keep a room alive; the snapshots and the
+// road surveyor only describe it. In crisis the descriptive half is dropped so the room keeps
+// defending and producing on whatever CPU is left.
+function runColonies(mode) {
+	const essentialOnly = mode === kernel.MODES.CRISIS;
+
+	for (const room of ownedRooms()) {
 		taskQueue.runTaskQueue(room);
 		spawnQueue.runSpawnQueue(room, Memory.taskBacklog);
+		if (essentialOnly) continue;
+
 		traffic.runTraffic(room);
 		mapSnapshot.publishMapSnapshot(room);
 		economyStats.publishEconomyStats(room);
 		strategySnapshot.publishStrategySnapshot(room);
 	}
+}
 
+function runCreeps() {
 	for (const name in Game.creeps) {
 		creepActions.runCreep(Game.creeps[name]);
 	}
-
-	reportCpuUsage();
-};
-
-function reportCpuUsage() {
-	const used = Game.cpu.getUsed();
-	Memory.cpuStats = { used, limit: Game.cpu.limit, bucket: Game.cpu.bucket, tick: Game.time };
-
-	const overThreshold = used > Game.cpu.limit * config.CPU_WARN_THRESHOLD;
-	if (overThreshold) {
-		log(`⚠ CPU 使用 ${used.toFixed(1)}/${Game.cpu.limit}(bucket ${Game.cpu.bucket})`);
-	}
 }
+
+// Registered in the order the spec fixes. empire and war are not built yet, so their slots are
+// simply absent rather than stubbed - when they arrive they slot in between intel and ally
+// without disturbing anything registered here.
+kernel.register('memory', runMemory, { core: true });
+kernel.register('intel', runIntel, { flex: true });
+kernel.register('colonies', runColonies, { core: true });
+kernel.register('creeps', runCreeps, { core: true });
+
+module.exports.loop = function () {
+	kernel.run();
+};
