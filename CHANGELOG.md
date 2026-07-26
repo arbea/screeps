@@ -29,3 +29,5 @@ changes are recorded only here.
 - Move screeps-call.js under tools/ so the game's folder sync stops uploading it as a module.
 - Show controller level, upgrade rate and the structure caps the level allows, so "at cap" is visible.
 - Time the shard rather than assuming, so a tick count can be stated in hours.
+- Throttle autonomous work by burn-rate pressure instead of stopping dead at 85%.
+- Watch the throttle tier from outside the session, since a stopped session cannot restart itself.
