@@ -70,3 +70,5 @@ changes are recorded only here.
 - Carry the breach plan across intel rebuilds instead of deriving it fresh every ten ticks, and say so in the log when no plan can be found at all.
 - Breach walls entry-side first, so the wall the plan names is always one the breacher can reach.
 - Never trust a 429's retry-after below our own doubling backoff (dashboard) - an 18-second figure was quoted mid-lockout and the retry was refused again.
+- Give every goal and mission card its own execution log - what was done, when, and what is being waited on - capped at 1000 characters each, written via tools/goal-log.js.
+- State the autonomous priority protocol in the handbook: work one goal at a time in card order, move down only when the current one is waiting on observation, read the log tails before redoing anything.
