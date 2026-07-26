@@ -19,3 +19,5 @@ changes are recorded only here.
 - Skip spawn requests whose body the room cannot afford.
 - Score only rooms surveyed first-hand, since an ally's report carries no source list.
 - Answer dashboard messages from the terminal session that has the context, not a cold one per message.
+- Rebuild the dashboard phone-first: bottom tabs, one view at a time, chat first, unread dot.
+- Keep a chat message in the box when the send fails, instead of clearing it and losing it.
