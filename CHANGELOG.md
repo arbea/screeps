@@ -31,3 +31,4 @@ changes are recorded only here.
 - Time the shard rather than assuming, so a tick count can be stated in hours.
 - Throttle autonomous work by burn-rate pressure instead of stopping dead at 85%.
 - Watch the throttle tier from outside the session, since a stopped session cannot restart itself.
+- Show the last message an ally actually sent, and how many ticks ago it arrived.
