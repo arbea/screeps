@@ -83,3 +83,4 @@ changes are recorded only here.
 - Re-align the traffic tables with the official docs: code is 240/day (POST, the verb we use), money-history's path was wrong, room-objects is undocumented and now carries a cap anyway; segment and code self-caps sized to the stricter verb.
 - Grow T5 into base-development progress: downgrade clock, safemode, power flag, the full build table with next-level unlocks and the not-yet roadmap, relic-wall backlog, and the upgrade ETA in wall-clock time.
 - Start LAYOUT.md - the LLM-curated bunker blueprint record; the layout is deliberately not a bot module, positions get built only once written down and dated there.
+- Price hour-TTL cache writes at their real 2x rate (1.25 was the five-minute figure), and calibrate on deltas when two official readings land in the same window - differencing cancels both weight error and the usage this machine's transcripts never see.
