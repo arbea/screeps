@@ -1,5 +1,6 @@
 const config = require('./config');
 const kernel = require('./kernel');
+require('./movement');
 const taskQueue = require('./taskQueue');
 const creepActions = require('./creepActions');
 const spawnQueue = require('./spawnQueue');
