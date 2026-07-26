@@ -73,3 +73,4 @@ changes are recorded only here.
 - Give every goal and mission card its own execution log - what was done, when, and what is being waited on - capped at 1000 characters each, written via tools/goal-log.js.
 - State the autonomous priority protocol in the handbook: work one goal at a time in card order, move down only when the current one is waiting on observation, read the log tails before redoing anything.
 - Judge source-regen loss on the user's marks - under 5% good, under 10% needs fixing, 10%+ failing - and on the rolling ten-cycle window, so a landed fix shows on the card instead of hiding under the lifetime average.
+- Reword the regen-loss card to the current standard: per-source rows show the true rolling-window count and colour by the same 5%/10% marks as the card's verdict, with the marks stated in the card's own explanation.
