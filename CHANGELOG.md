@@ -32,3 +32,4 @@ changes are recorded only here.
 - Throttle autonomous work by burn-rate pressure instead of stopping dead at 85%.
 - Watch the throttle tier from outside the session, since a stopped session cannot restart itself.
 - Show the last message an ally actually sent, and how many ticks ago it arrived.
+- Add a fourth page for reconciling with the ally, with a box that queues into the protocol outbox.
