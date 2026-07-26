@@ -27,3 +27,5 @@ changes are recorded only here.
 - Measure AI usage from session transcripts and stand down at 85% until the window resets.
 - Book what each source still held when it regenerated - energy produced and never collected.
 - Move screeps-call.js under tools/ so the game's folder sync stops uploading it as a module.
+- Show controller level, upgrade rate and the structure caps the level allows, so "at cap" is visible.
+- Time the shard rather than assuming, so a tick count can be stated in hours.
