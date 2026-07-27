@@ -84,6 +84,13 @@ async function checkTier() {
 
 	if (baselineTier === null) { baselineTier = autonomy.tier; return; }
 	if (autonomy.tier !== baselineTier) wake('tier', `${baselineTier} → ${autonomy.tier}`);
+
+	// The countdown the session promised on the dashboard. Waking here is what turns that display
+	// from a claim into a commitment: a session that is merely pacing itself gets woken and resets
+	// the clock, and a session that died leaves it visibly running out.
+	if (autonomy.nextAt && Date.now() >= autonomy.nextAt) {
+		wake('schedule', autonomy.nextNote || '排定的下次決策時間到了');
+	}
 }
 
 async function checkAlly() {
