@@ -78,17 +78,27 @@ function checkChat() {
 
 let baselineTier = null;
 
+// A deadline that had already passed when this watcher started belongs to the wake that started
+// it - the session is awake, that is why it is re-arming. Firing on it again wakes the session
+// into the same state it just left, which loops: wake, re-arm, wake. Recorded once at startup
+// and ignored until the session sets a new one.
+let staleDeadline = null;
+
 async function checkTier() {
 	let autonomy;
 	try { autonomy = await getJson(BASE + '/api/autonomy'); } catch (err) { return; }
 
-	if (baselineTier === null) { baselineTier = autonomy.tier; return; }
+	if (baselineTier === null) {
+		baselineTier = autonomy.tier;
+		if (autonomy.nextAt && Date.now() >= autonomy.nextAt) staleDeadline = autonomy.nextAt;
+		return;
+	}
 	if (autonomy.tier !== baselineTier) wake('tier', `${baselineTier} → ${autonomy.tier}`);
 
 	// The countdown the session promised on the dashboard. Waking here is what turns that display
 	// from a claim into a commitment: a session that is merely pacing itself gets woken and resets
 	// the clock, and a session that died leaves it visibly running out.
-	if (autonomy.nextAt && Date.now() >= autonomy.nextAt) {
+	if (autonomy.nextAt && Date.now() >= autonomy.nextAt && autonomy.nextAt !== staleDeadline) {
 		wake('schedule', autonomy.nextNote || '排定的下次決策時間到了');
 	}
 }
