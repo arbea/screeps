@@ -3,16 +3,26 @@ const config = require('./config');
 const { logAssign, logDefense, describeTask } = require('./log');
 const expansion = require('./expansion');
 const mining = require('./mining');
+const buildOrder = require('./buildOrder');
+const logistics = require('./logistics');
+const taskOrder = require('./taskOrder');
+const hostiles = require('./hostiles');
 
 function buildTaskQueue(room) {
 	const tasks = [];
 
+	ensureExtensionSites(room);
 	addDefenseTasks(room, tasks);
-	addRefillTasks(room, tasks);
+	// Deliveries are the ledger's business now, spawn and tower refills included - a separate
+	// refill task aimed at the same structures would double-deliver, since in-transit energy is
+	// only deducted for haul tasks.
+	logistics.addHaulTasks(room, tasks);
+	addPickupTasks(room, tasks);
 	addMiningTasks(room, tasks);
 	addBuildTasks(room, tasks);
 	addRepairTasks(room, tasks);
 	addUpgradeTask(room, tasks);
+	addRecycleTasks(room, tasks);
 	tasks.push(...expansion.runExpansion(room));
 
 	tasks.sort((a, b) => b.priority - a.priority);
@@ -20,43 +30,44 @@ function buildTaskQueue(room) {
 }
 
 function addDefenseTasks(room, tasks) {
-	const target = room.find(FIND_HOSTILE_CREEPS)[0];
+	const target = hostiles.findHostileCreeps(room)[0];
 	if (!target) return;
 
 	logDefense(room, target);
 	tasks.push({
 		id: `${TASK_TYPES.DEFENSE}:${room.name}`,
 		type: TASK_TYPES.DEFENSE,
-		priority: config.PRIORITY.DEFENSE,
+		priority: taskOrder.basePriority(TASK_TYPES.DEFENSE),
 		targetId: target.id,
 	});
 }
 
-function addRefillTasks(room, tasks) {
-	const spawnsAndExtensions = room.find(FIND_MY_STRUCTURES, {
-		filter: structure =>
-			(structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION) &&
-			structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-	});
-	for (const structure of spawnsAndExtensions) {
-		tasks.push({
-			id: `${TASK_TYPES.REFILL_SPAWN}:${structure.id}`,
-			type: TASK_TYPES.REFILL_SPAWN,
-			priority: config.PRIORITY.REFILL_SPAWN,
-			targetId: structure.id,
-		});
-	}
+// Loose energy was only ever a supply for haulers already holding a delivery: with every sink
+// full, nobody was sent to collect it and it evaporated where it lay - the decay stream T3
+// measures. A pile is now work in its own right, so an idle creep is dispatched to it whether or
+// not anything needs feeding. Tombstones and ruins count too: their contents disappear entirely
+// when the container decays, which is the death loss the same ledger books.
+//
+// One task per pile, and the id names it - two creeps sent to the same 50-energy heap means one
+// wasted trip. Piles too small to be worth the walk are left alone; they decay to nothing on
+// their own, and the trip costs more than the energy.
+const MIN_PILE_TO_COLLECT = 25;
 
-	const towers = room.find(FIND_MY_STRUCTURES, {
-		filter: structure =>
-			structure.structureType === STRUCTURE_TOWER && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-	});
-	for (const tower of towers) {
+function addPickupTasks(room, tasks) {
+	const piles = [];
+	for (const pile of room.find(FIND_DROPPED_RESOURCES, { filter: resource => resource.resourceType === RESOURCE_ENERGY })) {
+		if (pile.amount >= MIN_PILE_TO_COLLECT) piles.push(pile);
+	}
+	// A grave's whole store is lost when it decays, so any amount is worth the walk.
+	for (const grave of room.find(FIND_TOMBSTONES, { filter: tomb => tomb.store[RESOURCE_ENERGY] > 0 })) piles.push(grave);
+	for (const ruin of room.find(FIND_RUINS, { filter: wreck => wreck.store[RESOURCE_ENERGY] > 0 })) piles.push(ruin);
+
+	for (const pile of piles) {
 		tasks.push({
-			id: `${TASK_TYPES.REFILL_TOWER}:${tower.id}`,
-			type: TASK_TYPES.REFILL_TOWER,
-			priority: config.PRIORITY.REFILL_TOWER,
-			targetId: tower.id,
+			id: `${TASK_TYPES.PICKUP}:${pile.id}`,
+			type: TASK_TYPES.PICKUP,
+			priority: taskOrder.basePriority(TASK_TYPES.PICKUP),
+			targetId: pile.id,
 		});
 	}
 }
@@ -67,7 +78,11 @@ function addRefillTasks(room, tasks) {
 // This replaces the old "several generalists each self-haul" harvest pattern, which wastes
 // travel time and under-utilizes a source's regen rate compared to one saturated miner.
 function addMiningTasks(room, tasks) {
-	const sources = room.find(FIND_SOURCES_ACTIVE);
+	// Every source, not only the ones holding energy this tick: a miner's square belongs to the
+	// source rather than to its current contents, and a drained source refills on its own while the
+	// miner waits on it. Withdrawing the task meanwhile would leave the miner idle, which is exactly
+	// what marks it as surplus and recycles it.
+	const sources = room.find(FIND_SOURCES);
 
 	for (const source of sources) {
 		ensureContainerSite(room, source);
@@ -76,50 +91,71 @@ function addMiningTasks(room, tasks) {
 		// walkable tiles surround it, or how many are needed to saturate its regen rate given
 		// the current (energy-capacity-limited) miner body size - extra miners beyond either
 		// limit don't add throughput, they just crowd the tile.
+		// Each miner is given one specific square rather than "somewhere next to the source":
+		// two miners told only to approach the source path to the same nearest square and shove
+		// each other off it forever. Keying the task by its square (instead of a slot number)
+		// also keeps ids stable when a miner dies - the survivors keep their squares, and only
+		// the vacated one is reissued.
 		const maxMiners = mining.maxMinersForSource(room, source);
 		const currentMiners = countCreepsAssignedTo(source.id, TASK_TYPES.MINE);
-		const openMinerSlots = Math.max(0, maxMiners - currentMiners);
+		const claimedTiles = getClaimedMineTiles(source.id);
+		const freeTiles = mining.getMiningTiles(room, source).filter(tile => !claimedTiles.has(`${tile.x},${tile.y}`));
+
+		const openMinerSlots = Math.max(0, Math.min(maxMiners - currentMiners, freeTiles.length));
 		for (let slot = 0; slot < openMinerSlots; slot++) {
+			const tile = freeTiles[slot];
 			tasks.push({
-				id: `${TASK_TYPES.MINE}:${source.id}:${currentMiners + slot}`,
+				id: `${TASK_TYPES.MINE}:${source.id}:${tile.x},${tile.y}`,
 				type: TASK_TYPES.MINE,
-				priority: config.PRIORITY.HARVEST,
+				priority: taskOrder.basePriority(TASK_TYPES.MINE),
 				targetId: source.id,
+				workPos: { x: tile.x, y: tile.y },
 			});
 		}
+	}
+}
 
-		// A single hauler slot starves the moment a source has more than one miner (or a fast
-		// miner) feeding it faster than one hauler can clear - open more slots when there's
-		// more energy sitting at the source than one hauler trip can carry, capped by the same
-		// tile-count ceiling as mining.
-		const haulSlots = mining.haulSlotsForSource(room, source);
-		const currentHaulers = countCreepsAssignedTo(source.id, TASK_TYPES.HAUL);
-		const openHaulSlots = Math.max(0, haulSlots - currentHaulers);
-		for (let slot = 0; slot < openHaulSlots; slot++) {
-			tasks.push({
-				id: `${TASK_TYPES.HAUL}:${source.id}:${currentHaulers + slot}`,
-				type: TASK_TYPES.HAUL,
-				priority: config.PRIORITY.HAUL,
-				targetId: source.id,
-			});
-		}
+// A miner is WORK and MOVE only - with no carry capacity it cannot build, haul or upgrade, so a
+// miner without a square to work is worth nothing alive. Surplus appears on its own as the room
+// grows: bigger bodies saturate a source with fewer miners, so maxMinersForSource shrinks and the
+// older, smaller miners become redundant. Recycling returns half their build cost and frees the
+// square they were standing on, which beats waiting out their remaining lifetime.
+//
+// The same reasoning covers every specialist whose demand is read off the map: a scout with no
+// room left to survey and a breacher with no wall standing between us and a source are worth
+// nothing alive either, and both were observed idling out their lifetime instead. Roles whose
+// demand swings tick to tick (hauler, builder, upgrader) stay out of this - their idleness is
+// the queue's business, not the recycler's.
+//
+// Squares, not miner headcount, decide which miner is surplus - only miners that failed to claim
+// one are recycled, so this can never take a miner away from a source that still has room for it.
+function isSurplusSpecialist(creep, room) {
+	const role = creep.memory.role;
+	if (role === 'miner') return true;
+	if (role === 'scout') return expansion.scoutDemand(room) === 0;
+	if (role === 'breacher') return !expansion.breachWorkExists(room);
+	return false;
+}
 
-		// An idle, empty-handed generalist that can't get a HAUL slot (e.g. the other source
-		// is temporarily depleted, or every slot is already taken) has no way to earn energy
-		// for BUILD/REPAIR/UPGRADE and just sits there. A last-resort, lowest-priority self-
-		// serve harvest fills whatever tile space the dedicated miners aren't already using,
-		// so idle labor can still make itself useful instead of waiting on nothing.
-		const fallbackSlots = Math.max(0, mining.getAccessibleTiles(room, source.pos).length - maxMiners);
-		const currentFallbackHarvesters = countCreepsAssignedTo(source.id, TASK_TYPES.HARVEST);
-		const openFallbackSlots = Math.max(0, fallbackSlots - currentFallbackHarvesters);
-		for (let slot = 0; slot < openFallbackSlots; slot++) {
-			tasks.push({
-				id: `${TASK_TYPES.HARVEST}:${source.id}:${currentFallbackHarvesters + slot}`,
-				type: TASK_TYPES.HARVEST,
-				priority: config.PRIORITY.HARVEST_FALLBACK,
-				targetId: source.id,
-			});
-		}
+function addRecycleTasks(room, tasks) {
+	const spawn = room.find(FIND_MY_SPAWNS)[0];
+	if (!spawn) return;
+
+	for (const name in Game.creeps) {
+		const creep = Game.creeps[name];
+		// A relief miner is idle on purpose - it is waiting out its predecessor's last ticks beside
+		// the source - and recycling it would undo the early spawn that put it there.
+		const idle = !creep.memory.task && !creep.memory.standbyFor;
+		if (!idle || !belongsToRoom(creep, room)) continue;
+		if (!isSurplusSpecialist(creep, room)) continue;
+
+		tasks.push({
+			id: `${TASK_TYPES.RECYCLE}:${creep.name}`,
+			type: TASK_TYPES.RECYCLE,
+			priority: taskOrder.basePriority(TASK_TYPES.RECYCLE),
+			targetId: spawn.id,
+			recycleCreepName: creep.name,
+		});
 	}
 }
 
@@ -149,10 +185,92 @@ function ensureContainerSite(room, source) {
 }
 
 function placeContainerNear(room, source) {
+	if (buildOrder.siteBudgetRemaining(room) <= 0) return;
+
 	const tile = mining.getAccessibleTiles(room, source.pos)[0];
 	if (!tile) return;
 
 	room.createConstructionSite(tile.x, tile.y, STRUCTURE_CONTAINER);
+}
+
+// Extensions are what raises energyCapacityAvailable, and until they exist the room can't
+// afford the bigger bodies (remote harvester, reserver) that everything past the home room
+// depends on. How many are allowed is fixed by the game per controller level and where they
+// can go is dictated by the terrain around the spawn - neither is a strategy choice, so both
+// are derived here rather than exposed as a count or a hand-authored layout to configure.
+function ensureExtensionSites(room) {
+	const isScanTick = Game.time % config.REPAIR_SCAN_INTERVAL === 0;
+	if (!isScanTick) return;
+
+	const spawn = room.find(FIND_MY_SPAWNS)[0];
+	if (!spawn) return;
+
+	const allowed = CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][room.controller.level];
+	const built = room.find(FIND_MY_STRUCTURES, {
+		filter: structure => structure.structureType === STRUCTURE_EXTENSION,
+	}).length;
+	const queued = room.find(FIND_MY_CONSTRUCTION_SITES, {
+		filter: site => site.structureType === STRUCTURE_EXTENSION,
+	}).length;
+
+	const missing = Math.min(allowed - built - queued, buildOrder.siteBudgetRemaining(room));
+	if (missing <= 0) return;
+
+	placeExtensionSites(room, spawn, missing);
+}
+
+// A radius-6 box around the spawn already holds more same-parity tiles than the 60 extensions
+// the game allows even at RCL 8, so the search never needs to sweep the whole room.
+const EXTENSION_SEARCH_RADIUS = 6;
+
+function isTileEmpty(room, x, y) {
+	const occupied =
+		room.lookForAt(LOOK_STRUCTURES, x, y).length > 0 || room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
+	return !occupied;
+}
+
+// Places extensions only on tiles sharing the spawn's parity, which leaves every
+// opposite-parity tile free: each extension keeps all four of its orthogonal neighbours
+// walkable, so a growing cluster can never seal the spawn in or block its own refill route.
+function placeExtensionSites(room, spawn, count) {
+	const terrain = room.getTerrain();
+	const parity = (spawn.pos.x + spawn.pos.y) % 2;
+	let placed = 0;
+
+	for (let radius = 1; radius <= EXTENSION_SEARCH_RADIUS; radius++) {
+		for (let dx = -radius; dx <= radius; dx++) {
+			for (let dy = -radius; dy <= radius; dy++) {
+				const enoughPlaced = placed >= count;
+				if (enoughPlaced) return;
+
+				// Only the outermost band of each box is new; inner tiles were covered by a
+				// smaller radius already.
+				const onRingEdge = Math.abs(dx) === radius || Math.abs(dy) === radius;
+				if (!onRingEdge) continue;
+
+				const x = spawn.pos.x + dx;
+				const y = spawn.pos.y + dy;
+				const inBounds = x >= 1 && x <= 48 && y >= 1 && y <= 48;
+				if (!inBounds) continue;
+				if ((x + y) % 2 !== parity) continue;
+				if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+				if (!isTileEmpty(room, x, y)) continue;
+
+				const created = room.createConstructionSite(x, y, STRUCTURE_EXTENSION) === OK;
+				if (created) placed++;
+			}
+		}
+	}
+}
+
+function getClaimedMineTiles(sourceId) {
+	const claimed = new Set();
+	for (const name in Game.creeps) {
+		const task = Game.creeps[name].memory.task;
+		const holdsTileHere = task && task.type === TASK_TYPES.MINE && task.targetId === sourceId && task.workPos;
+		if (holdsTileHere) claimed.add(`${task.workPos.x},${task.workPos.y}`);
+	}
+	return claimed;
 }
 
 function countCreepsAssignedTo(targetId, taskType) {
@@ -163,13 +281,29 @@ function countCreepsAssignedTo(targetId, taskType) {
 }
 
 function addBuildTasks(room, tasks) {
+	const underAttack = hostiles.findThreateningCreeps(room).length > 0;
+
 	for (const site of room.find(FIND_MY_CONSTRUCTION_SITES)) {
 		tasks.push({
 			id: `${TASK_TYPES.BUILD}:${site.id}`,
 			type: TASK_TYPES.BUILD,
-			priority: config.PRIORITY.BUILD,
+			priority: buildOrder.buildPriority(room, site.structureType, underAttack),
 			targetId: site.id,
 		});
+	}
+}
+
+// Walls in an owned room are always a previous occupant's leftovers - nothing here builds one -
+// and unlike relic roads they never decay, so they sit as pathing obstacles forever. destroy()
+// needs no creep and is how an owner clears them; the few hundred energy a dismantle crew could
+// recover is not worth the WORK-ticks. Runs on the repair scan's cadence because both walk the
+// same structure list; destroy() fails closed (the game refuses it while hostiles are present).
+function clearRelicWalls(room) {
+	const isScanTick = Game.time % config.REPAIR_SCAN_INTERVAL === 0;
+	if (!isScanTick) return;
+
+	for (const wall of room.find(FIND_STRUCTURES, { filter: structure => structure.structureType === STRUCTURE_WALL })) {
+		wall.destroy();
 	}
 }
 
@@ -178,7 +312,7 @@ function addRepairTasks(room, tasks) {
 		tasks.push({
 			id: `${TASK_TYPES.REPAIR}:${structureId}`,
 			type: TASK_TYPES.REPAIR,
-			priority: config.PRIORITY.REPAIR,
+			priority: taskOrder.basePriority(TASK_TYPES.REPAIR),
 			targetId: structureId,
 		});
 	}
@@ -194,8 +328,14 @@ function getRepairTargetIds(room) {
 	const stale = !cache || Game.time - cache.lastScan >= config.REPAIR_SCAN_INTERVAL;
 	if (!stale) return cache.ids;
 
+	// Walls are excluded because the threshold cannot say anything about them: a wall's hitsMax is
+	// 300M, so every wall ever built sits below any fraction of it forever - 76 of them were each
+	// holding a permanent task here. And unlike roads or containers a wall does not decay; raising
+	// its hits is fortification, a strategy with no policy yet, not upkeep.
 	const structures = room.find(FIND_STRUCTURES, {
-		filter: structure => structure.hits < structure.hitsMax * config.REPAIR_HP_THRESHOLD,
+		filter: structure =>
+			structure.structureType !== STRUCTURE_WALL &&
+			structure.hits < structure.hitsMax * config.REPAIR_HP_THRESHOLD,
 	});
 	Memory.repairCache[room.name] = { lastScan: Game.time, ids: structures.map(structure => structure.id) };
 	return Memory.repairCache[room.name].ids;
@@ -206,12 +346,21 @@ function addUpgradeTask(room, tasks) {
 	const controllerMissingOrNotMine = !controller || !controller.my;
 	if (controllerMissingOrNotMine) return;
 
-	tasks.push({
-		id: `${TASK_TYPES.UPGRADE}:${controller.id}`,
-		type: TASK_TYPES.UPGRADE,
-		priority: config.PRIORITY.UPGRADE,
-		targetId: controller.id,
-	});
+	// One task per standing spot, not one per controller: a task id is held by a single creep,
+	// so one UPGRADE task silently capped the crew at one - the second and third upgrader the
+	// population maths asked for stood idle their whole lives waiting on an id that never freed
+	// up. Slots keyed like miner squares keep each id unique, and the tile count is the same
+	// physical cap upgraderTarget already sizes the crew against.
+	const slots = mining.getAccessibleTiles(room, controller.pos).length;
+	for (let slot = 0; slot < slots; slot++) {
+		tasks.push({
+			id: `${TASK_TYPES.UPGRADE}:${controller.id}:${slot}`,
+			type: TASK_TYPES.UPGRADE,
+			priority: taskOrder.upgradePriority(controller),
+			targetId: controller.id,
+			slot,
+		});
+	}
 }
 
 function hasCapabilityForTask(creep, taskType) {
@@ -220,10 +369,24 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.DEFENSE || taskType === TASK_TYPES.REMOTE_DEFENSE) {
 		return partTypes.includes(ATTACK) || partTypes.includes(RANGED_ATTACK);
 	}
-	if (taskType === TASK_TYPES.HARVEST || taskType === TASK_TYPES.REMOTE_HARVEST) {
+	// Dismantling is WORK alone - no CARRY involved, the wall doesn't care what the creep holds.
+	if (taskType === TASK_TYPES.DISMANTLE) {
 		return partTypes.includes(WORK);
 	}
-	if (taskType === TASK_TYPES.REFILL_SPAWN || taskType === TASK_TYPES.REFILL_TOWER || taskType === TASK_TYPES.HAUL) {
+	// Restricted to the 'remoteHarvester' role: that's the only body built with CARRY parts
+	// (creepBodies.buildRemoteHarvesterBody) and homeRoom memory (expansion.js). A 'miner' also has
+	// WORK parts but zero CARRY capacity and no homeRoom, so if it slipped in here
+	// runRemoteHarvest's "am I full" check reads 0/0 as permanently full and the creep just loops
+	// toward `RoomPosition(25,25,undefined)` instead of ever mining.
+	if (taskType === TASK_TYPES.REMOTE_HARVEST) {
+		return creep.memory.role === 'remoteHarvester' && partTypes.includes(WORK);
+	}
+	if (
+		taskType === TASK_TYPES.REFILL_SPAWN ||
+		taskType === TASK_TYPES.REFILL_TOWER ||
+		taskType === TASK_TYPES.HAUL ||
+		taskType === TASK_TYPES.PICKUP
+	) {
 		return partTypes.includes(CARRY);
 	}
 	if (taskType === TASK_TYPES.SCOUT) {
@@ -235,27 +398,84 @@ function hasCapabilityForTask(creep, taskType) {
 	if (taskType === TASK_TYPES.RESERVE_CONTROLLER) {
 		return partTypes.includes(CLAIM);
 	}
+	// Upgrading ranks below hauling and building, which is correct - but only because the creep
+	// hired to do it isn't competing for those. Left open to anyone, an upgrader simply took the
+	// highest-priority task available, which was never UPGRADE, and the controller went nowhere
+	// while its downgrade timer was topped up just often enough to hide it. The role is what makes
+	// a low priority safe: nobody else wants the job, and the one who has it wants nothing else.
+	if (taskType === TASK_TYPES.UPGRADE) {
+		return creep.memory.role === 'upgrader' && partTypes.includes(WORK) && partTypes.includes(CARRY);
+	}
+	// Builders get first claim on building, but repair stays open - it is maintenance that anyone
+	// carrying energy can do, and gating it too would leave decaying roads waiting on a busy crew.
+	if (taskType === TASK_TYPES.BUILD) {
+		return creep.memory.role === 'builder' && partTypes.includes(WORK) && partTypes.includes(CARRY);
+	}
 	return partTypes.includes(WORK) && partTypes.includes(CARRY);
 }
 
 function isCreepReadyForTask(creep, taskType) {
 	const gatheringTask =
-		taskType === TASK_TYPES.HARVEST ||
+		taskType === TASK_TYPES.PICKUP ||
 		taskType === TASK_TYPES.DEFENSE ||
 		taskType === TASK_TYPES.REMOTE_HARVEST ||
 		taskType === TASK_TYPES.REMOTE_DEFENSE ||
 		taskType === TASK_TYPES.SCOUT ||
 		taskType === TASK_TYPES.RESERVE_CONTROLLER ||
+		taskType === TASK_TYPES.DISMANTLE ||
 		taskType === TASK_TYPES.MINE;
 	if (gatheringTask) return true;
 
-	const alwaysPicksUpFirst = taskType === TASK_TYPES.HAUL;
-	if (alwaysPicksUpFirst) return true;
+	// These all fetch their own load from the ledger when they run dry, so arriving empty is the
+	// normal start of a cycle rather than a reason to be passed over. Requiring energy up front
+	// was what kept an empty builder or upgrader out of its own queue.
+	const fetchesItsOwnEnergy =
+		taskType === TASK_TYPES.HAUL ||
+		taskType === TASK_TYPES.BUILD ||
+		taskType === TASK_TYPES.REPAIR ||
+		taskType === TASK_TYPES.UPGRADE;
+	if (fetchesItsOwnEnergy) return true;
 
 	return creep.store[RESOURCE_ENERGY] > 0;
 }
 
+// What each specialised role is allowed to work on. Restricting who may take a task was only half
+// the problem: an upgrader still has CARRY, hauling outranks upgrading, and nothing stopped it
+// taking the haul - so the controller stayed idle while the creep hired to raise it ferried energy.
+// A role has to be a commitment in both directions, or the low priority its own job carries means
+// it never gets done.
+//
+// Builders keep repair as well, because a room with nothing to build still has roads decaying, and
+// an idle builder is the obvious one to send. Roles absent here - and creeps with no role at all -
+// fall through to the capability check and may take anything they can physically do.
+const ROLE_DUTIES = {
+	miner: [TASK_TYPES.MINE],
+	breacher: [TASK_TYPES.DISMANTLE],
+	// Collecting is the hauler's job in both directions - taking a load somewhere, and picking a
+	// load up off the floor before it evaporates.
+	hauler: [TASK_TYPES.HAUL, TASK_TYPES.PICKUP],
+	upgrader: [TASK_TYPES.UPGRADE],
+	builder: [TASK_TYPES.BUILD, TASK_TYPES.REPAIR],
+	scout: [TASK_TYPES.SCOUT],
+	reserver: [TASK_TYPES.RESERVE_CONTROLLER],
+	remoteHarvester: [TASK_TYPES.REMOTE_HARVEST],
+	defender: [TASK_TYPES.DEFENSE],
+	remoteDefender: [TASK_TYPES.REMOTE_DEFENSE],
+};
+
+function isWithinRoleDuties(creep, taskType) {
+	const duties = ROLE_DUTIES[creep.memory.role];
+	if (!duties) return true;
+
+	return duties.includes(taskType);
+}
+
 function canCreepDoTask(creep, task) {
+	// Matched by name rather than by body: a recycle task names the single creep it disposes of,
+	// and any other creep taking it would walk to the spawn and destroy itself.
+	if (task.type === TASK_TYPES.RECYCLE) return creep.name === task.recycleCreepName;
+
+	if (!isWithinRoleDuties(creep, task.type)) return false;
 	if (!hasCapabilityForTask(creep, task.type)) return false;
 	return isCreepReadyForTask(creep, task.type);
 }
@@ -264,8 +484,19 @@ function isCreepIdle(creep) {
 	return !creep.memory.task;
 }
 
+// A creep is only ever re-tasked by a queue that considers it, and queues run per owned room. A
+// creep idle in a room nobody owns - a scout parked abroad after its survey, a breacher whose
+// wall fell mid-job - matched no queue at all, so it stood there for the rest of its life. Such
+// a creep belongs to the room that sent it: homeRoom when stamped, otherwise whichever owned
+// room is asking.
+function belongsToRoom(creep, room) {
+	if (creep.room.name === room.name) return true;
+	if (creep.memory.homeRoom) return creep.memory.homeRoom === room.name;
+	return !(creep.room.controller && creep.room.controller.my);
+}
+
 function assignTasks(room, taskQueue) {
-	const idleCreeps = _.filter(Game.creeps, creep => creep.room.name === room.name && isCreepIdle(creep));
+	const idleCreeps = _.filter(Game.creeps, creep => belongsToRoom(creep, room) && isCreepIdle(creep));
 
 	// Task lists are rebuilt fresh every tick (same id, new object), so a task already held by
 	// a non-idle creep from a previous tick would otherwise look "unclaimed" here and get
@@ -334,6 +565,8 @@ function publishSnapshot(room, taskQueue) {
 }
 
 function runTaskQueue(room) {
+	clearRelicWalls(room);
+
 	const taskQueue = buildTaskQueue(room);
 	updateBacklog(taskQueue);
 	assignTasks(room, taskQueue);

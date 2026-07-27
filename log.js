@@ -10,26 +10,27 @@ function log(message) {
 function pushEventLog(message) {
 	Memory.eventLog.push({ tick: Game.time, message });
 
-	const configuredSize = config.EVENT_LOG_SIZE;
-	const validSize = typeof configuredSize === 'number' && Number.isFinite(configuredSize) && configuredSize > 0;
-	const maxSize = validSize ? configuredSize : 50;
-
-	const overCap = Memory.eventLog.length > maxSize;
+	const overCap = Memory.eventLog.length > config.EVENT_LOG_SIZE;
 	if (overCap) Memory.eventLog.shift();
 }
+
+const ROOM_ONLY_TASK_LABELS = {
+	[TASK_TYPES.SCOUT]: '偵查',
+	[TASK_TYPES.REMOTE_DEFENSE]: '遠程防禦',
+	[TASK_TYPES.REMOTE_HARVEST]: '遠程礦源(移動中)',
+	[TASK_TYPES.RESERVE_CONTROLLER]: '佔領 Controller(移動中)',
+};
 
 function describeTask(task, target) {
 	if (!target) {
 		if (task.targetRoomName) {
-			const label = task.type === TASK_TYPES.SCOUT ? '偵查' : '遠程防禦';
+			const label = ROOM_ONLY_TASK_LABELS[task.type] || task.type;
 			return `${label} (${task.targetRoomName})`;
 		}
 		return task.type;
 	}
 
 	switch (task.type) {
-		case TASK_TYPES.HARVEST:
-			return `礦源 (${target.pos.x},${target.pos.y})`;
 		case TASK_TYPES.REFILL_SPAWN:
 			return `${target.structureType === STRUCTURE_SPAWN ? 'Spawn' : 'Extension'} 補給`;
 		case TASK_TYPES.REFILL_TOWER:
@@ -48,8 +49,15 @@ function describeTask(task, target) {
 			return `遠程礦源 (${target.pos.roomName} ${target.pos.x},${target.pos.y})`;
 		case TASK_TYPES.MINE:
 			return `駐守開採 (${target.pos.x},${target.pos.y})`;
+		case TASK_TYPES.PICKUP:
+			// A loose pile reports .amount; a tombstone or ruin reports a store.
+			return target.amount !== undefined
+				? `撿拾掉落能量 ${target.amount} (${target.pos.x},${target.pos.y})`
+				: `搜刮遺骸 ${target.store[RESOURCE_ENERGY]} (${target.pos.x},${target.pos.y})`;
 		case TASK_TYPES.HAUL:
 			return `搬運能量 (${target.pos.x},${target.pos.y})`;
+		case TASK_TYPES.RECYCLE:
+			return '回收多餘礦工';
 		default:
 			return task.type;
 	}
@@ -66,6 +74,9 @@ function logDone(creep, task, target) {
 const SPAWN_ROLE_LABELS = {
 	defender: '戰鬥兵',
 	miner: '礦工',
+	hauler: '搬運兵',
+	builder: '建造兵',
+	upgrader: '升級兵',
 	scout: '偵查兵',
 	reserver: '佔領兵',
 	remoteHarvester: '遠程採礦兵',
@@ -73,7 +84,7 @@ const SPAWN_ROLE_LABELS = {
 };
 
 function logSpawn(role, name, cost) {
-	const roleLabel = SPAWN_ROLE_LABELS[role] || '通才兵';
+	const roleLabel = SPAWN_ROLE_LABELS[role] || role;
 	log(`[誕生] 新的${roleLabel} ${name} 誕生了(造價 ${cost} 能量)`);
 }
 

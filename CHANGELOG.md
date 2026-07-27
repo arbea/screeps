@@ -1,0 +1,106 @@
+# Changelog
+
+One line per change, saying what it was for. The source is the detail.
+
+Anything before 2026-07-26 is in `git log`. `screeps-dashboard/` is not tracked by git, so its
+changes are recorded only here.
+
+## 2026-07-26
+
+- Confine harvesting to dedicated miners; no other role earns energy at a source any more.
+- Make config.js constants only; behaviour changes by editing code and deploying, not from Memory.
+- Drop the dashboard's knob panel, so no setting has two places it can come from.
+- Surface what the bot already computed and never showed: CPU tier, bucket ceiling, active haulers, controller progress.
+- Name every task type once, after half of them had been rendering as `undefined`.
+- Put the room's structures on the minimap.
+- Poll Screeps only while somebody is watching; the timer alone spent twelve days of API quota a day.
+- Stop treating a regenerating source as one that has ceased to exist.
+- Let miners stand on their square rather than beside it.
+- Skip spawn requests whose body the room cannot afford.
+- Score only rooms surveyed first-hand, since an ally's report carries no source list.
+- Answer dashboard messages from the terminal session that has the context, not a cold one per message.
+- Rebuild the dashboard phone-first: bottom tabs, one view at a time, chat first, unread dot.
+- Keep a chat message in the box when the send fails, instead of clearing it and losing it.
+- Rebuild again as three swipeable pages - chat, map, goals/log - with arrows for the desk.
+- Count every Screeps API call against its published limit, since the responses carry no headers.
+- Route terminal-side Screeps calls through screeps-call.js so the meter can see them.
+- Measure AI usage from session transcripts and stand down at 85% until the window resets.
+- Book what each source still held when it regenerated - energy produced and never collected.
+- Move screeps-call.js under tools/ so the game's folder sync stops uploading it as a module.
+- Show controller level, upgrade rate and the structure caps the level allows, so "at cap" is visible.
+- Time the shard rather than assuming, so a tick count can be stated in hours.
+- Throttle autonomous work by burn-rate pressure instead of stopping dead at 85%.
+- Watch the throttle tier from outside the session, since a stopped session cannot restart itself.
+- Show the last message an ally actually sent, and how many ticks ago it arrived.
+- Add a fourth page for reconciling with the ally, with a box that queues into the protocol outbox.
+- Target an 85-95% usage band: never throttle below the floor, ration inside it, stand down above it.
+- Write HANDBOOK.md - the operating rules a fresh session needs, kept current as behaviour changes.
+- Serve the handbook from the dashboard, read fresh per request.
+- Fix a ReferenceError that had stopped the room spawning entirely since the upgrader change.
+- Add tools/check-references.js, which finds the undefined-name bugs node -c cannot see.
+- Let the reported usage percentage anchor the estimate, since the official page needs a login.
+- Back off for as long as a Screeps refusal asks, instead of retrying into the same wall every 90s.
+- Stop queueing a repair task per wall - walls never decay, and 76 of them held a permanent task each.
+- Show the conquest goal's real path: a reserver for an empty room, and no step hardcoded undone.
+- Read the owner from our own intel's shape too, which had E48S29 (held by parnell) down as unowned.
+- Add /api/autonomy so the watcher can glance at the tier without spending a Screeps call.
+- Build tools/watch-dash.js, the wake-up watcher the handbook described but nobody had written.
+- Give a stuck creep's detour path the same walls the straight one respects; a miner spent 349 ticks two tiles from home for want of them.
+- Number the goal cards by stated priority: AI usage, API restraint, source loss, controller, conquest.
+- Record an hourly battle-status entry on the reconciliation page, in the format the ally's document specifies.
+- Destroy relic walls in owned rooms from the bot itself - destroy() needs no creep, and 76 of them were pathing obstacles that never decay.
+- Track how long each non-combat creep stands idle, and hold it under ten seconds as goal 4.
+- Mirror the hourly entry into the ally's shared ledger by that page's own sentry flow, throttled so restarts don't stamp extra lines.
+- Stop the watcher waking on ally ack churn - a read receipt appears one cycle and clears the next.
+- Count a remote source as operating only if a route exists from our entry inside its room - E47S28's walls seal our whole border, so its mining paused.
+- Loot ruins and tombstones like any other pile, the only demolition the game allows.
+- Order a relief miner one lead time before its predecessor dies, and have it wait beside the pit.
+- Draw a glyph on every point structure and map marker, creep-bubble style, so a phone can tell a tower from an extension.
+- Keep every goal card alive across data loss, and split one-time missions from metrics that never close.
+- Adopt the ally's fixed append flow - one sectioned call per ledger entry, verified or retried.
+- Enforce self-imposed per-endpoint caps locally, refusing with a retry-after before a request ever leaves the machine.
+- Let the terminal ask the dashboard for allowance before spending a call, so both consumers obey one ledger.
+- Keep terrain on disk - restarts were re-buying rock that cannot move.
+- Require a proven route as an explicit step in every expansion mission, tested from our entry inside the room.
+- Stop an empty snapshot reading as "nobody idle" - no data now defers to the last real reading, marked paused.
+- Give the upgrade job one task per standing spot - a single task id capped the crew at one, and every extra upgrader the maths asked for idled its whole life.
+- Recycle idle scouts and breachers the moment the map demands none, the same way surplus miners already go.
+- Let a creep idle in an unowned room be re-tasked by the room that sent it - a breacher finished its job abroad and no queue could ever see it again.
+- Stop the stall check stripping a dismantler parked at its wall - standing still for thousands of ticks is what breaching an 881k-hit wall looks like.
+- Carry the breach plan across intel rebuilds instead of deriving it fresh every ten ticks, and say so in the log when no plan can be found at all.
+- Breach walls entry-side first, so the wall the plan names is always one the breacher can reach.
+- Never trust a 429's retry-after below our own doubling backoff (dashboard) - an 18-second figure was quoted mid-lockout and the retry was refused again.
+- Give every goal and mission card its own execution log - what was done, when, and what is being waited on - capped at 1000 characters each, written via tools/goal-log.js.
+- State the autonomous priority protocol in the handbook: work one goal at a time in card order, move down only when the current one is waiting on observation, read the log tails before redoing anything.
+- Judge source-regen loss on the user's marks - under 5% good, under 10% needs fixing, 10%+ failing - and on the rolling ten-cycle window, so a landed fix shows on the card instead of hiding under the lifetime average.
+- Reword the regen-loss card to the current standard: per-source rows show the true rolling-window count and colour by the same 5%/10% marks as the card's verdict, with the marks stated in the card's own explanation.
+- Poll no faster than the self-cap can afford (150s, 24/hour against a 30/hour cap), and report a local self-cap pause as a pause with a countdown - not as a Screeps API error, which it never was.
+- Decouple page views from API spending entirely: Screeps is polled on a fixed 155-second schedule whether anyone is watching or not, and every page request just re-renders the latest cache.
+- Judge creep idleness as a share of lifetime - under 5% good, above needs adjusting - on the 300-tick rolling window, replacing the absolute 10-second mark.
+- Account for every energy flow (energyLedger.js): income at the source's own drain, spending at the intent that spends it, waste at the moment it becomes unrecoverable - regen leftovers, ground decay, cargo dying with its creep, downgrade ticks.
+- Judge T3 as total waste over total production against the same 5%/10% marks, and draw the account as two donut charts - income and spend, waste as one red slice with its breakdown in labeled rows beneath.
+- Restate T4 as idle-to-lifetime share: every non-combat creep's accumulated idle ticks over its lived ticks, fleet-weighted, under 5% good and above it flagged for analysis - with the five worst creeps listed on the card, over-mark rows marked.
+- Re-align the traffic tables with the official docs: code is 240/day (POST, the verb we use), money-history's path was wrong, room-objects is undocumented and now carries a cap anyway; segment and code self-caps sized to the stricter verb.
+- Grow T5 into base-development progress: downgrade clock, safemode, power flag, the full build table with next-level unlocks and the not-yet roadmap, relic-wall backlog, and the upgrade ETA in wall-clock time.
+- Start LAYOUT.md - the LLM-curated bunker blueprint record; the layout is deliberately not a bot module, positions get built only once written down and dated there.
+- Price hour-TTL cache writes at their real 2x rate (1.25 was the five-minute figure), and calibrate on deltas when two official readings land in the same window - differencing cancels both weight error and the usage this machine's transcripts never see.
+- Route by time rather than distance: each creep's terrain costs are derived from its own body (fatigue per step on road/plain/swamp), so a 1:1 hauler stops detouring onto roads that buy it nothing while a 5-WORK miner still prefers them.
+- Cache the room's structure cost matrix instead of rebuilding it from a full structure scan on every path search, invalidated on the construction-site count and every 50 ticks.
+- Make loose energy, tombstones, and ruins their own task type instead of only a supply for haulers already carrying a delivery - a pile with no sink to feed used to sit there evaporating.
+- Narrow the AI usage band to 80-90% (was 85-95%).
+- Treat a missing structure-scan timestamp as stale: `Game.time - undefined` is NaN, which is not >= anything, so the structure cache read as fresh forever and the map snapshot froze the day it shipped - the 76 relic walls the dashboard kept reporting were a snapshot the bot could no longer replace.
+- Anchor the usage gauge to the last official reading instead of dividing local spend by the calibrated ceiling: the differential ceiling is a slope, and using it alone assumed the usage this machine cannot see was zero, which read 19% against an account page saying 48%.
+- Re-check the bunker anchor against real walk cost and overturn round 1: the open 11x11 block is 14 ticks further from the spawn than a column beside it, and RCL8 never needs that much room - the layout hugs the spawn instead.
+- Make autonomous execution a switch on the usage card rather than a status label, persisted across dashboard restarts, and state the pacing target as where the current rate lands at reset - under the ceiling means take on more work, not merely "no throttling needed".
+- Split the autonomy control into the user's checkbox and the session's own execution lamp, so a ticked box beside a dark lamp shows that nobody picked the instruction up; project the landing point on the session window rather than the weekly one.
+- Verify the round-2 tiles by flood fill (every worksite stays reachable with all 60 extensions placed) and find the catch: those tiles sit on the extension lattice, and the band holds only 71 same-parity tiles against RCL8's 60 extensions plus everything else.
+- Add a next-decision countdown the session sets and the watcher enforces: a lit lamp cannot distinguish pacing from a dead session, but an overdue countdown can - the watcher wakes the session at the deadline, so a paced session resets the clock and a dead one lets it run out visibly.
+- Move the countdown beside the execution lamp, since the two are read as one status, and add a one-click calibration bookmarklet: nothing server-side can read the account page, but code the user runs in their own already-logged-in browser can.
+- Derive the wake interval from the pace arithmetic instead of fixing it: the gap between wakes is the throttle, so it scales with pressure (15 min x pressure, clamped 3-60), shortening when the budget is going unspent and lengthening when it is being spent too fast.
+- Overturn round 3 again: facilities on the opposite parity seal the room (controller and both sources unreachable), so every blocking structure goes on the spawn's own parity and the opposite parity stays empty as the walkway - and the whole room offers 877 such tiles against RCL8's 90, so capacity was never the constraint.
+- Stop the watcher firing on a deadline that had already passed when it started: the session re-arming it is by definition awake, so re-firing woke it into the state it had just left and looped.
+- Rewrite the handbook: today's rules arrived as patches on patches, so it was reorganised around the three-part autonomy control, the wake discipline, and the API limits as actually measured - and two stale claims were removed, including one saying the relic walls were already cleared.
+- Make the usage card's header fit a phone: the three controls drop to their own full-width row under 560px, the lamp sheds its timestamp and tier, and the overdue countdown shortens to a chip with the explanation in its tooltip.
+- Stop an unanswered chat message waking the watcher every five seconds - only messages that appear after it starts count as new.
+- Settle RCL3's build list (five extension tiles, tower at 21,30 defending assets rather than the border) and price a rampart ring: 0.66 energy/tick just to hold 22 tiles against decay, 3.3% of everything the room earns, so it waits for RCL4.
+- Record the recurring mistake behind three wrong layout answers: hand-drawn coordinate search boxes.

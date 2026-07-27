@@ -33,6 +33,24 @@ function getAccessibleTiles(room, pos) {
 	return tiles;
 }
 
+// The squares a miner can work this source from, container first: a miner drops its energy on
+// the square it stands on, so putting it on the container is the difference between the energy
+// being stored and it decaying on the ground. Order is otherwise the fixed scan order of
+// getAccessibleTiles, so a given square keeps its place in the list from tick to tick.
+function getMiningTiles(room, source) {
+	const containerKeys = new Set(
+		source.pos
+			.findInRange(FIND_STRUCTURES, 1, {
+				filter: structure => structure.structureType === STRUCTURE_CONTAINER,
+			})
+			.map(container => `${container.pos.x},${container.pos.y}`)
+	);
+
+	return getAccessibleTiles(room, source.pos).sort(
+		(a, b) => (containerKeys.has(`${a.x},${a.y}`) ? 0 : 1) - (containerKeys.has(`${b.x},${b.y}`) ? 0 : 1)
+	);
+}
+
 // A source's harvest rate caps out once total WORK parts working it reach SATURATION_WORK -
 // beyond that, extra miners don't add throughput. So the real limit on how many miners a
 // source supports is whichever is smaller: how many fit around it, or how many are needed
@@ -45,24 +63,10 @@ function maxMinersForSource(room, source) {
 	return Math.max(1, Math.min(minersForSaturation, accessibleTileCount));
 }
 
-const HAULER_CAPACITY_ESTIMATE = 50; // conservative baseline; matches the default generalist body
-
-// How many haulers a source can usefully occupy: enough to clear whatever's currently piled
-// up in its container/on the ground within one round trip each, capped by physical tile
-// space - same "derive it from the map, don't guess a number" logic as maxMinersForSource.
-function haulSlotsForSource(room, source) {
-	const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
-		filter: structure => structure.structureType === STRUCTURE_CONTAINER,
-	})[0];
-	const stored = container ? container.store[RESOURCE_ENERGY] : 0;
-	const dropped = source.pos
-		.findInRange(FIND_DROPPED_RESOURCES, 2)
-		.reduce((sum, resource) => sum + resource.amount, 0);
-
-	const neededByVolume = Math.ceil((stored + dropped) / HAULER_CAPACITY_ESTIMATE);
-	const accessibleTileCount = getAccessibleTiles(room, source.pos).length;
-
-	return Math.max(1, Math.min(neededByVolume, accessibleTileCount));
-}
-
-module.exports = { minerWorkCount, getAccessibleTiles, maxMinersForSource, haulSlotsForSource, SATURATION_WORK };
+module.exports = {
+	minerWorkCount,
+	getAccessibleTiles,
+	getMiningTiles,
+	maxMinersForSource,
+	SATURATION_WORK,
+};
