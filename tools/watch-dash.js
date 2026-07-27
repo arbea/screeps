@@ -67,13 +67,29 @@ function wake(reason, detail) {
 	process.exit(0);
 }
 
+// Messages that were already waiting when this watcher started are the reason it started: the
+// session is awake and working on them. Waking again for the same ones fires every five seconds
+// until a reply is written, which buries the session in its own notifications while it is trying
+// to answer. Only genuinely new messages wake it.
+let knownPending = null;
+
 function checkChat() {
 	let log;
 	try { log = JSON.parse(fs.readFileSync(CHAT_PATH, 'utf8')); } catch (err) { return; }
 
 	const entries = Array.isArray(log) ? log : log.messages || [];
 	const pending = entries.filter(entry => entry.status === 'pending');
-	if (pending.length > 0) wake('chat', `${pending.length} 則待回覆訊息:${pending[pending.length - 1].message}`);
+
+	if (knownPending === null) {
+		knownPending = new Set(pending.map(entry => entry.id));
+		return;
+	}
+
+	const fresh = pending.filter(entry => !knownPending.has(entry.id));
+	if (fresh.length === 0) return;
+
+	for (const entry of fresh) knownPending.add(entry.id);
+	wake('chat', `${fresh.length} 則待回覆訊息:${fresh[fresh.length - 1].message}`);
 }
 
 let baselineTier = null;
