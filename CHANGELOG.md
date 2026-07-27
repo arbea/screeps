@@ -102,3 +102,5 @@ changes are recorded only here.
 - Rewrite the handbook: today's rules arrived as patches on patches, so it was reorganised around the three-part autonomy control, the wake discipline, and the API limits as actually measured - and two stale claims were removed, including one saying the relic walls were already cleared.
 - Make the usage card's header fit a phone: the three controls drop to their own full-width row under 560px, the lamp sheds its timestamp and tier, and the overdue countdown shortens to a chip with the explanation in its tooltip.
 - Stop an unanswered chat message waking the watcher every five seconds - only messages that appear after it starts count as new.
+- Settle RCL3's build list (five extension tiles, tower at 21,30 defending assets rather than the border) and price a rampart ring: 0.66 energy/tick just to hold 22 tiles against decay, 3.3% of everything the room earns, so it waits for RCL4.
+- Record the recurring mistake behind three wrong layout answers: hand-drawn coordinate search boxes.
